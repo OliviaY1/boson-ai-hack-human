@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { seedProjects } from "@/lib/mock-data";
+import { OAKVILLE_THESIS, seedProjects } from "@/lib/mock-data";
 import {
   addInterviewQuestion,
   advanceMockInterview,
   createInterviewsFromPlan,
   generateMockResearchPlan,
+  hypothesesFromThesis,
   missingSamples,
   startMockInterview,
   withoutProject,
@@ -124,7 +125,39 @@ describe("saved projects", () => {
   it("offers sample projects only when they are not already saved", () => {
     const ps = seedProjects();
     expect(missingSamples(ps)).toHaveLength(0);
-    expect(missingSamples([]).map((p) => p.id)).toEqual(["northstar", "harbor", "summit"]);
-    expect(missingSamples([ps[0]!]).map((p) => p.id)).toEqual(["harbor", "summit"]);
+    expect(missingSamples([]).map((p) => p.id)).toEqual(["northstar", "harbor", "summit", "oakville"]);
+    expect(missingSamples([ps[0]!]).map((p) => p.id)).toEqual(["harbor", "summit", "oakville"]);
+  });
+});
+
+describe("hypotheses from the thesis", () => {
+  it("turns each 'Label: We believe …' pillar of the Oakville thesis into a hypothesis", () => {
+    const hs = hypothesesFromThesis(OAKVILLE_THESIS);
+    expect(hs.map((h) => h.title)).toEqual([
+      "Market Attractiveness",
+      "Competitive Positioning",
+      "Organic Revenue Growth",
+      "Operational Efficiency",
+      "Talent Retention",
+      "Acquisition-Led Expansion",
+      "Financial Returns",
+    ]);
+    expect(hs[0]!.description.startsWith("We believe Oakville's")).toBe(true);
+  });
+
+  it("falls back to the template for free-text theses", () => {
+    expect(hypothesesFromThesis("A great company with strong growth.")).toEqual([]);
+  });
+
+  it("uses the pillars in a generated plan", () => {
+    const p = seedProjects().find((x) => x.id === "oakville")!;
+    const plan = generateMockResearchPlan({
+      ...p,
+      experts: [
+        { id: "c1", name: "Olivia", title: "Custom contact", phone: "", description: "Dog owner", source: "Custom" },
+      ],
+    });
+    expect(plan.hypotheses).toHaveLength(7);
+    expect(plan.experts[0]!.hypothesisIds).toHaveLength(7);
   });
 });

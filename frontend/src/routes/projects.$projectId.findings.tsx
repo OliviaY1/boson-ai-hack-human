@@ -52,9 +52,7 @@ function FindingsPage() {
   const { clear: clearRound } = useRoundView();
   if (!project) return null;
   const r = generateMockFindings(project);
-  const allDone =
-    project.interviews.length > 0 && project.interviews.every((i) => i.status === "Completed");
-  // One finished interview is enough to open the findings (marked interim until all are done).
+  // Opening Findings means the consultant is done; one finished interview is enough.
   const anyDone = project.interviews.some((i) => i.status === "Completed");
   const roundNo = (project.pastRounds?.length ?? 0) + 1;
 
@@ -77,9 +75,6 @@ function FindingsPage() {
       <div className="flex items-center gap-2">
         <Badge tone="primary">Thesis validation and research gaps by GPT-6 from completed interviews</Badge>
         {roundNo > 1 && <Badge tone="outline">Consolidated across all research rounds</Badge>}
-        {!allDone && project.interviews.length > 0 && (
-          <Badge tone="outline">Interim — interviews still running</Badge>
-        )}
       </div>
 
       <LlmFindings project={project} update={update} />

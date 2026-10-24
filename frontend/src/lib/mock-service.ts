@@ -131,6 +131,28 @@ export function startNextRound(p: DiligenceProject): DiligenceProject {
 
 export const uid = (p = "id") => `${p}-${Math.random().toString(36).slice(2, 9)}`;
 
+/**
+ * The thesis's own pillars as hypotheses: every line shaped like
+ * "Label: We believe …" becomes one ("Market Attractiveness: We believe …").
+ * Returns [] when the thesis is free text, so the template hypotheses are used.
+ */
+export function hypothesesFromThesis(thesis: string): InvestmentHypothesis[] {
+  const out: InvestmentHypothesis[] = [];
+  for (const line of thesis.split(/\r?\n/)) {
+    const m = line.trim().match(/^([A-Z][A-Za-z0-9&/,'()\- ]{2,60}):\s+(.{10,})$/);
+    if (!m) continue;
+    const title = m[1]!.trim();
+    const description = m[2]!.trim();
+    out.push({
+      id: `h${out.length + 1}`,
+      title,
+      description,
+      evidence: `Interview evidence for or against: ${description.replace(/^we believe\s+/i, "")}`,
+    });
+  }
+  return out.length >= 2 ? out : [];
+}
+
 const isDental = (p: DiligenceProject) => /dental|dentist/i.test(p.company + " " + p.thesis);
 
 /** Experts the consultant has chosen for this project: all custom contacts plus selected network experts. */
@@ -185,7 +207,8 @@ export function generateMockResearchPlan(input: DiligenceProject): ResearchPlan 
     };
   }
   const c = project.company || "the target";
-  const hypotheses: InvestmentHypothesis[] = [
+  const fromThesis = hypothesesFromThesis(project.thesis);
+  const template: InvestmentHypothesis[] = [
     {
       id: "h1",
       title: "Customer demand is resilient",
@@ -211,13 +234,18 @@ export function generateMockResearchPlan(input: DiligenceProject): ResearchPlan 
       evidence: "Realised synergies, cost benchmarks.",
     },
   ];
+  const hypotheses = fromThesis.length ? fromThesis : template;
   return {
     hypotheses,
     experts: project.experts.slice(0, 3).map((e, i) => ({
       expertId: e.id,
       reason: `${e.title || "Expert"} with relevant perspective on ${c}.`,
-      hypothesisIds: [hypotheses[i % 4]!.id, hypotheses[(i + 1) % 4]!.id],
-      objectives: `Test ${hypotheses[i % 4]!.title.toLowerCase()}.`,
+      hypothesisIds: fromThesis.length
+        ? hypotheses.map((h) => h.id)
+        : [hypotheses[i % 4]!.id, hypotheses[(i + 1) % 4]!.id],
+      objectives: fromThesis.length
+        ? `Test the investment thesis for ${c}.`
+        : `Test ${hypotheses[i % 4]!.title.toLowerCase()}.`,
       questions: [
         `What is your experience with ${c} or its direct competitors?`,
         "What drives customers to stay with or leave a provider in this market?",

@@ -136,7 +136,7 @@ function IntervieweePage() {
         </h1>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[320px_1fr]">
+      <div className="grid gap-6 md:grid-cols-[220px_1fr]">
         <div className="space-y-4">
           <AvatarView mediaRef={mediaRef} state={st} name={name} muted={false} />
           {phase === "ended" ? (

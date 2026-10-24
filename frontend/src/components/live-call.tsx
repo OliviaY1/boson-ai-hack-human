@@ -358,10 +358,13 @@ export function AvatarView({
         {name}
         {muted ? " · video only" : ""}
       </p>
-      <div
-        ref={mediaRef}
-        className="relative aspect-[3/4] w-full overflow-hidden rounded-md border bg-muted [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
-      >
+      <div className="relative mx-auto aspect-[3/4] w-full max-w-[220px] overflow-hidden rounded-md border bg-muted">
+        {/* The avatar code appends its <video>/<audio> here. React renders nothing inside
+            this node, so the two never touch the same children. */}
+        <div
+          ref={mediaRef}
+          className="absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
+        />
         {(!a || a.status !== "live") && (
           <p className="absolute inset-0 flex items-center justify-center p-4 text-center text-xs text-muted-foreground">
             {!a || a.status === "off"

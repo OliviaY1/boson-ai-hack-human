@@ -145,7 +145,10 @@ export class CallController {
       },
       onServerEvent: (evt) => this.onServerEvent(evt),
       onClose: (info) => {
-        if (info.code !== 1000) this.error = info.message;
+        // Say why the call ended unless it was a normal hang-up.
+        if (info.code !== 1000 || (info.reason && info.reason !== "client disconnect")) {
+          this.error = info.message;
+        }
       },
     });
   }
@@ -301,6 +304,12 @@ export class CallController {
 
   private onServerEvent(evt: ServerEvent): void {
     this.transcript = transcriptReducer(this.transcript, evt, Date.now());
+
+    // Errors from Higgs Realtime are shown, not swallowed.
+    if (evt.type === SERVER.error) {
+      const e = evt["error"] as { message?: string; type?: string; code?: string } | undefined;
+      this.error = `Higgs Realtime error: ${e?.message ?? e?.code ?? e?.type ?? JSON.stringify(evt)}`;
+    }
 
     // The interviewer finished a reply: every question actually said is now "said".
     const said = evt["transcript"];

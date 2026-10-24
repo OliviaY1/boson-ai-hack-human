@@ -72,7 +72,11 @@ export interface CallState {
   connection: ConnectionState;
   activity: Activity;
   micActive: boolean;
-  avatar: { status: "off" | "starting" | "live" | "error" | "ended"; detail: string };
+  /** `room` is the avatar's LiveKit room ("" if none), for watch-only viewers. */
+  avatar: { status: "off" | "starting" | "live" | "error" | "ended"; detail: string; room: string };
+  /** When the conversation started (mic on, call live) and ended; null until then. */
+  startedAt: number | null;
+  endedAt: number | null;
   questions: CallQuestion[];
   transcript: CallTurn[];
   claude: { status: "idle" | "updating" | "error"; detail: string };
@@ -106,7 +110,9 @@ export class CallController {
   private connection: ConnectionState = "idle";
   private activity: Activity = "idle";
   private micActive = false;
-  private avatarState: CallState["avatar"] = { status: "off", detail: "" };
+  private avatarState: CallState["avatar"] = { status: "off", detail: "", room: "" };
+  private startedAt: number | null = null;
+  private endedAt: number | null = null;
   private claudeState: CallState["claude"] = { status: "idle", detail: "" };
   private error = "";
 
@@ -161,6 +167,8 @@ export class CallController {
       activity: this.activity,
       micActive: this.micActive,
       avatar: this.avatarState,
+      startedAt: this.startedAt,
+      endedAt: this.endedAt,
       claude: this.claudeState,
       error: this.error,
       questions: this.rows.map((r) => ({
@@ -200,6 +208,8 @@ export class CallController {
     this.greetingAnswered = false;
     this.closingSent = false;
     this.transcript = emptyTranscript;
+    this.startedAt = null;
+    this.endedAt = null;
     this.emit();
 
     // Inside the click: unlock local audio before anything is awaited.
@@ -226,6 +236,7 @@ export class CallController {
       return;
     }
     this.phase = "live";
+    this.startedAt = Date.now();
     this.emit();
   }
 
@@ -233,7 +244,7 @@ export class CallController {
   async stop(): Promise<void> {
     this.client.disconnect();
     await this.closeAvatar("ended");
-    this.phase = "ended";
+    this.markEnded();
     this.emit();
   }
 
@@ -244,6 +255,11 @@ export class CallController {
   }
 
   // --- internals -------------------------------------------------------------
+
+  private markEnded(): void {
+    if (this.phase !== "ended") this.endedAt = this.startedAt !== null ? Date.now() : null;
+    this.phase = "ended";
+  }
 
   private row(text: string, added: boolean): QuestionRow {
     return { id: `q${++this.seq}`, text, status: "pending", added, changedAt: added ? Date.now() : null };
@@ -260,7 +276,7 @@ export class CallController {
       for (const w of this.openWaiters.splice(0)) w(false);
       // Disconnect, the closing line, or an error: the call is over.
       if (this.phase === "live" || this.phase === "starting") {
-        this.phase = "ended";
+        this.markEnded();
         void this.closeAvatar("ended");
       }
     }
@@ -329,7 +345,7 @@ export class CallController {
   }
 
   private async startAvatar(avatarId: string, container: HTMLElement): Promise<void> {
-    this.avatarState = { status: "starting", detail: "" };
+    this.avatarState = { status: "starting", detail: "", room: "" };
     this.emit();
     try {
       const link = await AvatarLink.start(avatarId, {
@@ -339,10 +355,10 @@ export class CallController {
       });
       this.avatar = link;
       this.client.setAvatar(link);
-      this.avatarState = { status: "live", detail: link.sessionId };
+      this.avatarState = { status: "live", detail: link.sessionId, room: link.roomName };
     } catch (e) {
       this.client.setAvatar(null);
-      this.avatarState = { status: "error", detail: `${errText(e)} — continuing with voice only` };
+      this.avatarState = { status: "error", detail: `${errText(e)} — continuing with voice only`, room: "" };
     }
     this.emit();
   }
@@ -352,7 +368,7 @@ export class CallController {
     this.avatar = null;
     this.client.setAvatar(null);
     if (!link) return;
-    this.avatarState = { status, detail };
+    this.avatarState = { status, detail, room: "" };
     this.emit();
     await link.close();
   }

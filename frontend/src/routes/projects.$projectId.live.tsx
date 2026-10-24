@@ -122,7 +122,8 @@ function LivePage() {
                 Live calls
               </Badge>
               <p className="text-sm text-muted-foreground">
-                Open an interview and press Start live call. Nothing runs until you do.
+                Open an interview and press Send the interview: the interviewee&apos;s page opens in a
+                new tab, and the call starts when they press Start interview.
               </p>
             </div>
             <div className="flex gap-2">

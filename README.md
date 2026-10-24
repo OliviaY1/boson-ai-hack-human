@@ -35,6 +35,16 @@ the avatar and truncates at the position its `lk.playback_finished` reports. Nee
 `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` in `.env`; without them the app
 falls back to local playback.
 
+### Consultant dashboard (`frontend/`)
+
+`cd frontend && npm install && npm run dev` (with `npm run dev` running at the repo root for
+`/api`). On an interview, **Send the interview** stores the call on the backend
+(`server/interviews.ts`) and opens the interviewee's page (`/interview/<id>`) in a new tab.
+The interviewee presses **Start interview**: that tab runs the call (microphone, Higgs
+Realtime, avatar with sound) and publishes its state; the consultant's tab watches live over
+Server-Sent Events (transcript, Claude's question changes, muted avatar video, duration) and
+can end the call. Sessions are kept in memory.
+
 ## The parts
 
 | Part | What you build | Checkpoint |

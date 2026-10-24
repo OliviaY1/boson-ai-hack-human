@@ -69,7 +69,7 @@ interface LkRoom {
     }): Promise<string>;
   };
 }
-interface LkModule {
+export interface LkModule {
   Room: new (options?: Record<string, unknown>) => LkRoom;
   RoomEvent: { TrackSubscribed: string; ParticipantDisconnected: string; Disconnected: string };
 }
@@ -82,7 +82,7 @@ declare global {
 
 let lkPromise: Promise<LkModule> | null = null;
 
-function loadLiveKit(): Promise<LkModule> {
+export function loadLiveKit(): Promise<LkModule> {
   if (window.LivekitClient) return Promise.resolve(window.LivekitClient);
   if (lkPromise) return lkPromise;
   lkPromise = new Promise((resolve, reject) => {

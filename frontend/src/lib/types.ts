@@ -101,6 +101,8 @@ export interface Interview {
   findings: Finding[];
   /** A real voice call (Higgs Realtime) is running; the demo simulation leaves it alone. */
   live?: boolean;
+  /** The backend interview session the interviewee's link points at. */
+  sessionId?: string;
 }
 
 export interface FindingReview {

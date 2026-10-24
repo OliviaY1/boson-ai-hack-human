@@ -189,13 +189,3 @@ The root debug app exposes editable session instructions, VAD/transcription even
 [Original usage guide](docs/how-to-use.md) · [Higgs Realtime documentation](https://docs.boson.ai/models/higgs-realtime/overview)
 
 </details>
-
-## Prototype boundaries
-
-This is a hackathon prototype with real voice/model integrations. Project data is saved in the consultant browser's localStorage; backend interview sessions live in process memory and disappear when that process restarts. Expert-network connections are demo directories, and the application does not dial phone numbers or deliver invitations by email/SMS.
-
-Quote checks establish textual inclusion in a submitted transcript. Evidence quality and investment conclusions still need human review. The [audit](docs/architecture/audit.md) documents authentication, persistence, synchronization, media-lifecycle, and type-checking work that remains.
-
-## License
-
-[Apache License 2.0](LICENSE).

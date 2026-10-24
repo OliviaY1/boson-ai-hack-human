@@ -68,6 +68,36 @@ function saidLine(reply: string, line: string): boolean {
   return hits / target.length >= 0.8;
 }
 
+/**
+ * Save the event log as a JSON file. Audio payloads (input_audio_buffer.append
+ * `audio`, response.output_audio.delta `delta`) are replaced by their length,
+ * which keeps the file small and readable; everything else is verbatim.
+ */
+function downloadLog(entries: LogEntry[]): void {
+  const slim = entries.map((e) => {
+    const raw = e.raw as Record<string, unknown> | null;
+    let copy: unknown = raw;
+    if (raw && typeof raw === "object") {
+      const c: Record<string, unknown> = { ...raw };
+      if (e.type === "input_audio_buffer.append" && typeof c.audio === "string") {
+        c.audio = `<${c.audio.length} base64 chars>`;
+      }
+      if (e.type === "response.output_audio.delta" && typeof c.delta === "string") {
+        c.delta = `<${c.delta.length} base64 chars>`;
+      }
+      copy = c;
+    }
+    return { at: new Date(e.at).toISOString(), dir: e.dir, type: e.type, raw: copy };
+  });
+  const blob = new Blob([JSON.stringify(slim, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `event-log-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /** The questions box as a list: one per line, blanks dropped. */
 function splitQuestions(text: string): string[] {
   return text
@@ -386,6 +416,12 @@ export default function App() {
         <span>Current transcript</span>
         <textarea readOnly value={toPlainText(transcript)} rows={10} />
       </label>
+
+      <div className="row">
+        <button onClick={() => downloadLog(log)} disabled={log.length === 0}>
+          Download event log (JSON)
+        </button>
+      </div>
 
       <DebugDrawer entries={log} />
       </div>

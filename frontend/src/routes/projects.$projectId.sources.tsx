@@ -30,6 +30,7 @@ import {
 } from "@/components/ui-kit";
 import { NETWORK_EXPERTS } from "@/lib/mock-data";
 import { generateMockResearchPlan, selectedExperts, uid } from "@/lib/mock-service";
+import { planWithClaudeQuestions } from "@/lib/initial-questions";
 import { useProject } from "@/lib/store";
 import type { Expert } from "@/lib/types";
 
@@ -90,12 +91,15 @@ function Sources() {
     setDraft(null);
   };
 
-  const generate = () => {
+  // The plan's structure (hypotheses, who to call) comes from the template; the
+  // opening questions for each person are written by Claude from the thesis and
+  // their description (template questions stay if Claude is unreachable).
+  const generate = async () => {
     setGenerating(true);
-    setTimeout(() => {
-      update((p) => ({ ...p, plan: generateMockResearchPlan(p), interviews: [] }));
-      navigate({ to: "/projects/$projectId/plan", params: { projectId } });
-    }, 1800);
+    const plan = await planWithClaudeQuestions(project, generateMockResearchPlan(project));
+    update((p) => ({ ...p, plan, interviews: [] }));
+    setGenerating(false);
+    navigate({ to: "/projects/$projectId/plan", params: { projectId } });
   };
 
   const filtered = project.experts.filter(
@@ -388,11 +392,9 @@ function Sources() {
             <Loader2 className="mx-auto size-6 animate-spin text-primary" />
             <p className="mt-4 font-medium">Generating research plan</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Extracting hypotheses from the thesis and matching {chosen.length} selected experts…
+              Claude is writing opening questions for {chosen.length} selected{" "}
+              {chosen.length === 1 ? "person" : "people"} from the investment thesis…
             </p>
-            <Badge tone="warning" className="mt-4">
-              Demo Simulation
-            </Badge>
           </Card>
         </div>
       )}

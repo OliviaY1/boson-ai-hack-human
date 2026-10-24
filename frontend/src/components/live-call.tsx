@@ -74,7 +74,9 @@ function mirror(iv: Interview, st: CallState, startedAt: number, kept: Interview
 export function useLiveCall(project: DiligenceProject, iv: Interview, setIv: SetIv) {
   const { settings, hydrated } = useAlexaSettings();
   const [state, setState] = useState<CallState | null>(null);
-  const [audience, setAudience] = useState<Audience>("expert");
+  // Default to who Claude judged this person to be when it wrote the plan.
+  const planned = project.plan?.experts.find((e) => e.expertId === iv.expertId)?.audience;
+  const [audience, setAudience] = useState<Audience>(planned ?? "expert");
   const mediaRef = useRef<HTMLDivElement | null>(null);
   const ctrl = useRef<CallController | null>(null);
   const latest = useRef<CallState | null>(null);

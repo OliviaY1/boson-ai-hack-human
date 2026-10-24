@@ -28,6 +28,7 @@ import { createInterviewsFromPlan, roundsOf, uid } from "@/lib/mock-service";
 import { useProject } from "@/lib/store";
 import { useRoundView } from "@/lib/round-view";
 import type { DiligenceProject, PlanExpert } from "@/lib/types";
+import { withClaudeQuestions } from "@/lib/initial-questions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/projects/$projectId/plan")({
@@ -183,7 +184,17 @@ function PlanExpertCard({
   const [editObj, setEditObj] = useState(false);
   const [obj, setObj] = useState(pe.objectives);
   const [confirm, setConfirm] = useState(false);
+  const [writing, setWriting] = useState(false);
   const e = expertOf(project, pe.expertId);
+  // Ask Claude again for this person's opening questions (e.g. after editing their description).
+  const regenerate = async () => {
+    if (!project.plan) return;
+    setWriting(true);
+    const next = await withClaudeQuestions(project, project.plan, pe);
+    onChange(() => next);
+    setObj(next.objectives);
+    setWriting(false);
+  };
 
   const move = (i: number, d: number) =>
     onChange((x) => {
@@ -203,6 +214,16 @@ function PlanExpertCard({
           <p className="text-sm text-muted-foreground">
             {e?.title} — {e?.description}
           </p>
+          {pe.questionNote && (
+            <p
+              className={cn(
+                "mt-1 text-xs",
+                pe.questionSource === "claude" ? "text-primary" : "text-warning",
+              )}
+            >
+              {pe.questionNote}
+            </p>
+          )}
           <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
             <div>
               <p className="text-xs text-muted-foreground">Reason for selection</p>
@@ -219,6 +240,17 @@ function PlanExpertCard({
           </div>
         </div>
         <div className="flex shrink-0 gap-1">
+          {!locked && (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={writing}
+              title="Write this person's opening questions with Claude from the thesis and their description"
+              onClick={() => void regenerate()}
+            >
+              {writing ? "Writing…" : "Rewrite with Claude"}
+            </Button>
+          )}
           {!locked && (
             <Button
               variant="ghost"

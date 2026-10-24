@@ -43,6 +43,11 @@ export interface PlanExpert {
   hypothesisIds: string[];
   objectives: string;
   questions: PlanQuestion[];
+  /** Who the person is, as Claude judged it; picks the live call's question style. */
+  audience?: "customer" | "expert";
+  /** Where the questions came from: Claude, or the built-in template (with why). */
+  questionSource?: "claude" | "template";
+  questionNote?: string;
 }
 
 export interface ResearchPlan {

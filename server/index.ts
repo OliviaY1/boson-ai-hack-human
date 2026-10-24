@@ -193,6 +193,114 @@ app.get("/api/token", async (_req, res) => {
   }
 });
 
+// --- Initial questions: Claude Haiku 5.5 writes the opening questions per person ---
+
+const INITIAL_SYSTEM = [
+  "You design the opening questions for a short phone interview that a private equity firm's",
+  "AI interviewer places to test an investment thesis. The call lasts about one minute and",
+  "every question is spoken aloud.",
+  "First decide who the person is: a customer (buys or uses the company's products or",
+  "services) or an industry expert (former employee, competitor, supplier, consultant,",
+  "analyst).",
+  "Then write the questions in the order to ask them: 3 for a customer, 4 for an expert.",
+  "Each one tests the thesis from this person's vantage point and is something they can",
+  "actually answer; under 15 words; one idea; open-ended, not yes/no; spoken English;",
+  "everyday words for customers, industry terms are fine for experts; no greeting, no",
+  "request for confidential information.",
+  "Also write the interview objectives in one sentence, and list the ids of the hypotheses",
+  "the questions test (only ids that were given).",
+  'Reply with JSON only: {"audience":"customer"|"expert","objectives":"...",',
+  '"hypothesis_ids":["..."],"questions":["..."]}',
+].join(" ");
+
+/** One Claude Messages API call; returns the reply text. */
+async function askClaude(system: string, user: string, maxTokens: number): Promise<string> {
+  const upstream = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY ?? "",
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: QUESTION_MODEL,
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user", content: user }],
+    }),
+  });
+  const body = await upstream.text();
+  if (!upstream.ok) throw new Error(`Anthropic ${upstream.status}: ${body}`);
+  const data = JSON.parse(body) as { content?: Array<{ type: string; text?: string }> };
+  return (data.content ?? [])
+    .filter((c) => c.type === "text")
+    .map((c) => c.text ?? "")
+    .join("");
+}
+
+/**
+ * POST /api/initial-questions
+ *   { company, thesis, person: { name, title, description, source },
+ *     hypotheses?: [{ id, title, description }] }
+ *   -> { audience, objectives, hypothesisIds, questions, raw, prompt, ms }
+ */
+app.post("/api/initial-questions", async (req, res) => {
+  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: "No ANTHROPIC_API_KEY in .env." });
+  const { company = "", thesis = "", person = {}, hypotheses = [] } = req.body ?? {};
+  const p = person as { name?: string; title?: string; description?: string; source?: string };
+  const hyps = Array.isArray(hypotheses)
+    ? (hypotheses as Array<{ id?: string; title?: string; description?: string }>)
+    : [];
+  const user = [
+    `Company: ${String(company)}`,
+    `Investment thesis: ${String(thesis) || "(not given)"}`,
+    hyps.length
+      ? `Hypotheses:\n${hyps.map((h) => `- ${h.id}: ${h.title}${h.description ? ` — ${h.description}` : ""}`).join("\n")}`
+      : "",
+    [
+      "Person to call:",
+      `- Name: ${p.name ?? ""}`,
+      `- Title: ${p.title ?? ""}`,
+      `- Source: ${p.source ?? ""}`,
+      `- Description: ${p.description ?? ""}`,
+    ].join("\n"),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const prompt = { model: QUESTION_MODEL, system: INITIAL_SYSTEM, user };
+  const startedAt = Date.now();
+  try {
+    const raw = await askClaude(INITIAL_SYSTEM, user, 500);
+    const match = raw.match(/\{[\s\S]*\}/);
+    const parsed = (match ? JSON.parse(match[0]) : {}) as {
+      audience?: unknown;
+      objectives?: unknown;
+      hypothesis_ids?: unknown;
+      questions?: unknown;
+    };
+    const strings = (v: unknown) =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
+    const questions = strings(parsed.questions).map((q) => q.trim());
+    if (!questions.length) throw new Error(`No questions in Claude's reply: ${raw}`);
+    return res.json({
+      audience: parsed.audience === "customer" ? "customer" : "expert",
+      objectives: typeof parsed.objectives === "string" ? parsed.objectives : "",
+      hypothesisIds: strings(parsed.hypothesis_ids),
+      questions,
+      raw,
+      prompt,
+      ms: Date.now() - startedAt,
+    });
+  } catch (err) {
+    console.error("initial questions error:", err);
+    return res.status(502).json({
+      error: err instanceof Error ? err.message : String(err),
+      prompt,
+      ms: Date.now() - startedAt,
+    });
+  }
+});
+
 // --- Higgs Avatar ---------------------------------------------------------------
 
 const DEFAULT_AVATAR_ID = "builtin_claire_v1";

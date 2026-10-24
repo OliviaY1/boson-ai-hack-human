@@ -11,6 +11,7 @@ import {
   generateMockFindings,
   generateNextRoundPlan,
   startNextRound,
+  thesisPillars,
 } from "@/lib/mock-service";
 import { useProject } from "@/lib/store";
 import { useRoundView } from "@/lib/round-view";
@@ -235,12 +236,7 @@ function ThesisValidationSection({
           </Button>
         }
       />
-      {project.thesis && (
-        <p className="mb-4 text-sm">
-          <span className="text-muted-foreground">Thesis: </span>
-          {project.thesis}
-        </p>
-      )}
+      {project.thesis && <ThesisText thesis={project.thesis} />}
       {v.error && <p className="mb-3 text-sm text-destructive">Validation failed: {v.error}</p>}
       {!v.hasEvidence && (
         <Card className="p-5 text-sm text-muted-foreground">
@@ -393,6 +389,33 @@ function ThinkingBar({ project }: { project: DiligenceProject }) {
       <p className="text-xs text-muted-foreground">
         Thesis validation and research gaps appear here when it is done.
       </p>
+    </Card>
+  );
+}
+
+/** The thesis as its pillars (label in bold), or as written if it is free text. */
+function ThesisText({ thesis }: { thesis: string }) {
+  const pillars = thesisPillars(thesis);
+  return (
+    <Card className="mb-4 p-5 text-sm">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        Investment thesis
+      </p>
+      {pillars.length ? (
+        <ul className="space-y-2">
+          {pillars.map((p, i) => (
+            <li key={i} className="flex gap-2">
+              <span className="font-mono text-xs leading-5 text-muted-foreground">H{i + 1}</span>
+              <span>
+                <span className="font-medium">{p.label}:</span>{" "}
+                <span className="text-muted-foreground">{p.text}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="whitespace-pre-line text-muted-foreground">{thesis}</p>
+      )}
     </Card>
   );
 }

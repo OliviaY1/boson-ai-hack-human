@@ -180,20 +180,34 @@ export const uid = (p = "id") => `${p}-${Math.random().toString(36).slice(2, 9)}
  * Returns [] when the thesis is free text, so the template hypotheses are used.
  */
 export function hypothesesFromThesis(thesis: string): InvestmentHypothesis[] {
-  const out: InvestmentHypothesis[] = [];
-  for (const line of thesis.split(/\r?\n/)) {
-    const m = line.trim().match(/^([A-Z][A-Za-z0-9&/,'()\- ]{2,60}):\s+(.{10,})$/);
-    if (!m) continue;
-    const title = m[1]!.trim();
-    const description = m[2]!.trim();
-    out.push({
-      id: `h${out.length + 1}`,
-      title,
-      description,
-      evidence: `Interview evidence for or against: ${description.replace(/^we believe\s+/i, "")}`,
-    });
+  return thesisPillars(thesis).map((p, i) => ({
+    id: `h${i + 1}`,
+    title: p.label,
+    description: p.text,
+    evidence: `Interview evidence for or against: ${p.text.replace(/^we believe\s+/i, "")}`,
+  }));
+}
+
+/**
+ * The "Label: text" pillars of a thesis, whether they are on separate lines or
+ * run together in one paragraph. A label starts a line or follows the end of a
+ * sentence, starts with a capital, and is followed by a colon. Fewer than two
+ * pillars means a free-text thesis: [].
+ */
+export function thesisPillars(thesis: string): Array<{ label: string; text: string }> {
+  const label = /(?:^|\n|(?<=[.!?])\s+)([A-Z][A-Za-z0-9&/,'()\- ]{2,60}?):\s+/g;
+  const starts: Array<{ label: string; at: number; body: number }> = [];
+  for (const m of thesis.matchAll(label)) {
+    const lead = m[0].length - m[0].trimStart().length;
+    starts.push({ label: m[1]!.trim(), at: m.index! + lead, body: m.index! + m[0].length });
   }
-  return out.length >= 2 ? out : [];
+  const pillars = starts
+    .map((s, i) => ({
+      label: s.label,
+      text: thesis.slice(s.body, starts[i + 1]?.at ?? thesis.length).replace(/\s+/g, " ").trim(),
+    }))
+    .filter((p) => p.text.length >= 10);
+  return pillars.length >= 2 ? pillars : [];
 }
 
 const isDental = (p: DiligenceProject) => /dental|dentist/i.test(p.company + " " + p.thesis);

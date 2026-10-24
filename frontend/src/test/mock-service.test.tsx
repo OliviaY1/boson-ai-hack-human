@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { OAKVILLE_THESIS, seedProjects } from "@/lib/mock-data";
+import type { DiligenceProject, ThesisValidationResult } from "@/lib/types";
 import {
   addInterviewQuestion,
   advanceMockInterview,
@@ -9,6 +10,8 @@ import {
   missingSamples,
   startMockInterview,
   withoutProject,
+  generateNextRoundPlan,
+  allHypotheses,
 } from "@/lib/mock-service";
 
 const david = () =>
@@ -161,5 +164,110 @@ describe("hypotheses from the thesis", () => {
     });
     expect(plan.hypotheses).toHaveLength(7);
     expect(plan.experts[0]!.hypothesisIds).toHaveLength(7);
+  });
+});
+
+describe("recommended next round from GPT-6's findings", () => {
+  // The Oakville demo after one live interview and a GPT-6 validation.
+  function oakvilleAfterOneInterview(): DiligenceProject {
+    const base = seedProjects().find((x) => x.id === "oakville")!;
+    const contacts = [
+      { id: "c-olivia", name: "Olivia Yan", title: "Custom contact", phone: "", description: "Dog owner in Oakville", source: "Custom" as const },
+      { id: "c-mark", name: "Mark Chen", title: "Custom contact", phone: "", description: "Former practice manager, GTA vet clinic", source: "Custom" as const },
+    ];
+    const withContacts = { ...base, experts: contacts };
+    const plan = { ...generateMockResearchPlan(withContacts), approved: true };
+    const interviews = createInterviewsFromPlan(plan);
+    interviews[0] = {
+      ...interviews[0]!,
+      status: "Completed",
+      transcript: [
+        { id: "t1", speaker: "ai", text: "How often do you visit the vet?", time: "00:01" },
+        { id: "t2", speaker: "expert", text: "Twice a year, and the clinic is close to home.", time: "00:05" },
+      ],
+    };
+    const [h1, h2, h3, h4, h5] = plan.hypotheses;
+    const thesisValidation: ThesisValidationResult = {
+      at: "2026-10-24T13:00:00Z",
+      model: "gpt-6",
+      inputKey: "k",
+      interviewCount: 1,
+      overall: { verdict: "Insufficient evidence", summary: "" },
+      hypotheses: [
+        { id: h1!.id, assessment: "Supported", confidence: "medium", rationale: "Regular visits.", evidence: [] },
+        { id: h2!.id, assessment: "Insufficient Evidence", confidence: "low", rationale: "Only one customer.", evidence: [] },
+        { id: h3!.id, assessment: "Mixed Evidence", confidence: "low", rationale: "Conflicting.", evidence: [] },
+        { id: h4!.id, assessment: "Contradicted", confidence: "medium", rationale: "Costs rising.", evidence: [] },
+        { id: h5!.id, assessment: "Insufficient Evidence", confidence: "low", rationale: "Not discussed.", evidence: [] },
+      ],
+      gaps: [
+        { hypothesisId: h2!.id, gap: "No evidence on local market share.", nextStep: "Call a competing clinic owner; ask how share has moved.", priority: "high" },
+        { hypothesisId: h4!.id, gap: "Cost savings unproven.", nextStep: "Ask a former practice manager about procurement costs.", priority: "medium" },
+      ],
+      droppedQuotes: 0,
+    };
+    return { ...withContacts, plan, interviews, selectedExpertIds: [], thesisValidation };
+  }
+
+  it("is offered once one interview is completed", () => {
+    const p = oakvilleAfterOneInterview();
+    expect(p.interviews.filter((i) => i.status === "Completed")).toHaveLength(1);
+    expect(p.interviews.length).toBeGreaterThan(1);
+    expect(canRecommendNextRound(p)).toBe(true);
+    expect(canRecommendNextRound({ ...p, interviews: p.interviews.map((i) => ({ ...i, status: "Not Started" as const })) })).toBe(false);
+  });
+
+  it("targets up to 3 hypotheses GPT-6 did not find supported, with their gaps and next steps", () => {
+    const p = oakvilleAfterOneInterview();
+    const all = p.plan!.hypotheses;
+    const { plan, newExperts } = generateNextRoundPlan(p);
+    expect(plan.hypotheses).toHaveLength(3);
+    // H1 was Supported, so the round starts at H2.
+    expect(plan.hypotheses.map((h) => h.title)).toEqual([
+      `Resolve: ${all[1]!.title}`,
+      `Resolve: ${all[2]!.title}`,
+      `Resolve: ${all[3]!.title}`,
+    ]);
+    expect(plan.hypotheses.map((h) => h.origin)).toEqual([
+      "Refined from H2 · Insufficient Evidence",
+      "Refined from H3 · Mixed Evidence",
+      "Refined from H4 · Contradicted",
+    ]);
+    // Described with the research gap; "who to call and what to ask" is the gap's next step.
+    expect(plan.hypotheses[0]!.description).toBe("No evidence on local market share.");
+    expect(plan.hypotheses[0]!.evidence).toBe("Call a competing clinic owner; ask how share has moved.");
+    // No gap for H3: falls back to GPT-6's rationale.
+    expect(plan.hypotheses[1]!.description).toBe("Conflicting.");
+    expect(plan.hypotheses.every((h) => h.round === 2)).toBe(true);
+    // People come from the consultant's contacts; no network experts are added.
+    expect(newExperts).toEqual([]);
+    expect(plan.experts.map((e) => e.expertId).every((id) => p.experts.some((x) => x.id === id))).toBe(true);
+    expect(plan.experts[0]!.questions).toHaveLength(3);
+    expect(plan.approved).toBe(false);
+  });
+
+  it("Create Round 2 Plan archives round 1 and opens the new plan", () => {
+    const p = oakvilleAfterOneInterview();
+    const r2 = startNextRound(p);
+    expect(r2.pastRounds).toHaveLength(1);
+    expect(r2.pastRounds![0]!.interviews).toEqual(p.interviews);
+    expect(r2.interviews).toEqual([]);
+    expect(r2.plan!.approved).toBe(false);
+    expect(r2.plan!.hypotheses[0]!.title.startsWith("Resolve: ")).toBe(true);
+    // Round 1 evidence stays available to the Findings page.
+    expect(allHypotheses(r2).length).toBe(p.plan!.hypotheses.length + 3);
+    expect(canRecommendNextRound(r2)).toBe(false);
+  });
+
+  it("offers nothing to resolve when GPT-6 found every hypothesis supported", () => {
+    const p = oakvilleAfterOneInterview();
+    const allSupported = {
+      ...p,
+      thesisValidation: {
+        ...p.thesisValidation!,
+        hypotheses: p.thesisValidation!.hypotheses.map((h) => ({ ...h, assessment: "Supported" as const })),
+      },
+    };
+    expect(generateNextRoundPlan(allSupported).plan.hypotheses).toEqual([]);
   });
 });

@@ -46,16 +46,10 @@ app.use(express.json({ limit: "200kb" }));
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY?.trim();
 const QUESTION_MODEL = "claude-haiku-5-5";
 
-const QUESTION_SYSTEM = [
-  "You maintain the question list for a short, live voice interview.",
-  "Given the interview context, the questions already asked, the remaining questions",
-  "and the transcript so far, decide which remaining questions to remove (already",
-  "answered, or no longer relevant) and which new follow-up questions to add.",
-  "New questions must be short (under 12 words), spoken English, one idea each.",
-  "Add at most 2. Copy removed questions exactly as they appear in the remaining list.",
-  'Reply with JSON only, no other text: {"add": ["..."], "remove": ["..."]}.',
-  "Use empty arrays when nothing should change.",
-].join(" ");
+const QUESTION_SYSTEM =
+  "Update the question list for a live voice interview. Remove remaining questions that are " +
+  "answered or irrelevant; add at most 2 short follow-ups (under 12 words). Reply only with " +
+  'JSON {"add":[],"remove":[]}, copying removed questions exactly.';
 
 /**
  * POST /api/questions  { context, asked: string[], remaining: string[], transcript }
@@ -70,8 +64,11 @@ app.post("/api/questions", async (req, res) => {
   const { context = "", asked = [], remaining = [], transcript = "" } = req.body ?? {};
   const list = (items: unknown) =>
     Array.isArray(items) && items.length ? items.map((q) => `- ${String(q)}`).join("\n") : "(none)";
+  // The context goes into the system prompt, ahead of everything that changes
+  // per call. The API keeps no state between calls, so it is still sent every
+  // time; putting the unchanging part first is what prompt caching needs.
+  const system = context ? `${QUESTION_SYSTEM}\n\nInterview context:\n${String(context)}` : QUESTION_SYSTEM;
   const userMessage = [
-    `Interview context:\n${String(context)}`,
     `Already asked:\n${list(asked)}`,
     `Remaining, in order:\n${list(remaining)}`,
     `Transcript so far:\n${String(transcript)}`,
@@ -88,7 +85,7 @@ app.post("/api/questions", async (req, res) => {
       body: JSON.stringify({
         model: QUESTION_MODEL,
         max_tokens: 300,
-        system: QUESTION_SYSTEM,
+        system,
         messages: [{ role: "user", content: userMessage }],
       }),
     });

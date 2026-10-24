@@ -62,6 +62,12 @@ export interface RealtimeCallbacks {
    * null to send nothing.
    */
   nextInstructions?: () => string | null;
+  /**
+   * Called with the full text of each assistant reply
+   * (response.output_audio_transcript.done). Return true to end the session
+   * once that reply has finished playing.
+   */
+  endsSession?: (assistantText: string) => boolean;
 }
 
 let logSeq = 0;
@@ -123,11 +129,15 @@ export class RealtimeClient {
   private sessionReady = false;
   /** The speak-first response.create has been sent on this connection. */
   private spokeFirst = false;
+  /** Disconnect as soon as playback finishes (the closing line was said). */
+  private endAfterPlayback = false;
+  private endFallback: ReturnType<typeof setTimeout> | null = null;
 
   constructor(callbacks: RealtimeCallbacks) {
     this.cb = callbacks;
     this.player = new RingPlayer((speaking) => {
       if (!speaking) this.setActivity(this.capture?.active ? "listening" : "idle");
+      if (!speaking && this.endAfterPlayback) this.endNow("closing line finished playing");
     });
     this.capture = new MicCapture(
       (base64) => this.send(inputAudioAppend(base64)),
@@ -169,6 +179,7 @@ export class RealtimeClient {
     this.connecting = true;
     this.sessionReady = false;
     this.spokeFirst = false;
+    this.endAfterPlayback = false;
     this.setState("connecting");
 
     // Must happen inside the user gesture that triggered this call, or the
@@ -299,6 +310,17 @@ export class RealtimeClient {
         void this.handleBargeIn();
         break;
 
+      case SERVER.audioTranscriptDone: {
+        const text = typeof evt.transcript === "string" ? evt.transcript : "";
+        if (text && this.cb.endsSession?.(text)) {
+          this.info("Closing line said — ending the session after playback.");
+          this.endAfterPlayback = true;
+          // Fallback in case playback already drained before this event.
+          this.endFallback = setTimeout(() => this.endNow("fallback timer"), 15_000);
+        }
+        break;
+      }
+
       case SERVER.speechStopped: {
         this.setActivity("thinking");
         // You finished a turn: send the next instructions, if there are any.
@@ -343,6 +365,15 @@ export class RealtimeClient {
         // handle. They are already logged. Never throw here.
         break;
     }
+  }
+
+  private endNow(why: string): void {
+    this.endAfterPlayback = false;
+    if (this.endFallback) clearTimeout(this.endFallback);
+    this.endFallback = null;
+    if (this.state !== "open") return;
+    this.info(`Ending the session (${why}).`);
+    this.disconnect();
   }
 
   /** Higgs speaks first: one bare response.create per connection. */

@@ -40,6 +40,25 @@ function questionInstructions(question: string): string {
   return `You are Alexa, a market researcher. Say exactly: "${question}" Nothing else.`;
 }
 
+/**
+ * The step right after the greeting: the model itself decides whether the
+ * person agreed, because the transcript of their answer arrives only after
+ * speech_stopped, when this has to be sent.
+ */
+function firstQuestionInstructions(question: string, closing: string): string {
+  return `You are Alexa, a market researcher. If the person said no, declined, or has no time, say exactly: "${closing}" Otherwise say exactly: "${question}" Nothing else.`;
+}
+
+/** Did this reply say the closing line? Compared word by word, ignoring case and punctuation. */
+function saidClosing(reply: string, closing: string): boolean {
+  const words = (t: string) => t.toLowerCase().match(/[a-z0-9']+/g) ?? [];
+  const target = words(closing);
+  if (target.length === 0) return false;
+  const said = new Set(words(reply));
+  const hits = target.filter((w) => said.has(w)).length;
+  return hits / target.length >= 0.8;
+}
+
 /** Ask our own server for a fresh ephemeral key. One per connection. */
 async function fetchToken(): Promise<string> {
   const res = await fetch("/api/token");
@@ -82,6 +101,7 @@ export default function App() {
       tokenProvider: fetchToken,
       instructionsProvider: () => instructionsRef.current,
       speakFirst: true,
+      endsSession: (reply) => saidClosing(reply, closingRef.current),
       nextInstructions: () => {
         const list = questionsRef.current
           .split("\n")
@@ -93,6 +113,8 @@ export default function App() {
         if (i >= steps.length) return null;
         questionIndexRef.current = i + 1;
         setQuestionIndex(i + 1);
+        const close = closingRef.current.trim();
+        if (i === 0 && list.length > 0 && close) return firstQuestionInstructions(list[0], close);
         return questionInstructions(steps[i]);
       },
       onConnectionState: setConnection,
@@ -172,7 +194,10 @@ export default function App() {
       </label>
 
       <label className="field">
-        <span>Closing — sent in one more session.update after the last question is answered</span>
+        <span>
+          Closing — said after the last answer, or right away if the greeting is declined; the
+          session ends once Alexa has said it
+        </span>
         <textarea value={closing} onChange={(e) => setClosing(e.target.value)} rows={2} />
       </label>
 

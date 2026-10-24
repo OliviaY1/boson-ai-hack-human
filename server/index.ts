@@ -39,6 +39,80 @@ function loadApiKey(): string | undefined {
 const BOSON_API_KEY = loadApiKey();
 
 const app = express();
+app.use(express.json({ limit: "200kb" }));
+
+// --- Question list: Claude Haiku 5.5 decides what to add and remove ---------
+
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY?.trim();
+const QUESTION_MODEL = "claude-haiku-5-5";
+
+const QUESTION_SYSTEM = [
+  "You maintain the question list for a short, live voice interview.",
+  "Given the interview context, the questions already asked, the remaining questions",
+  "and the transcript so far, decide which remaining questions to remove (already",
+  "answered, or no longer relevant) and which new follow-up questions to add.",
+  "New questions must be short (under 12 words), spoken English, one idea each.",
+  "Add at most 2. Copy removed questions exactly as they appear in the remaining list.",
+  'Reply with JSON only, no other text: {"add": ["..."], "remove": ["..."]}.',
+  "Use empty arrays when nothing should change.",
+].join(" ");
+
+/**
+ * POST /api/questions  { context, asked: string[], remaining: string[], transcript }
+ *   -> { add: string[], remove: string[] }
+ *
+ * The Anthropic key stays here, on the server, like the Boson key.
+ */
+app.post("/api/questions", async (req, res) => {
+  if (!ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: "No ANTHROPIC_API_KEY in .env." });
+  }
+  const { context = "", asked = [], remaining = [], transcript = "" } = req.body ?? {};
+  const list = (items: unknown) =>
+    Array.isArray(items) && items.length ? items.map((q) => `- ${String(q)}`).join("\n") : "(none)";
+  const userMessage = [
+    `Interview context:\n${String(context)}`,
+    `Already asked:\n${list(asked)}`,
+    `Remaining, in order:\n${list(remaining)}`,
+    `Transcript so far:\n${String(transcript)}`,
+  ].join("\n\n");
+
+  try {
+    const upstream = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: QUESTION_MODEL,
+        max_tokens: 300,
+        system: QUESTION_SYSTEM,
+        messages: [{ role: "user", content: userMessage }],
+      }),
+    });
+    const body = await upstream.text();
+    if (!upstream.ok) {
+      console.error(`anthropic ${upstream.status}: ${body}`);
+      return res.status(upstream.status).json({ error: `Anthropic ${upstream.status}: ${body}` });
+    }
+    const data = JSON.parse(body) as { content?: Array<{ type: string; text?: string }> };
+    const text = (data.content ?? [])
+      .filter((c) => c.type === "text")
+      .map((c) => c.text ?? "")
+      .join("");
+    // Take the first {...} in the reply, in case the model wraps it in prose.
+    const match = text.match(/\{[\s\S]*\}/);
+    const parsed = match ? (JSON.parse(match[0]) as { add?: unknown; remove?: unknown }) : {};
+    const strings = (v: unknown) =>
+      Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
+    return res.json({ add: strings(parsed.add), remove: strings(parsed.remove), raw: text });
+  } catch (err) {
+    console.error("question update error:", err);
+    return res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
 
 /**
  * GET /api/token
@@ -96,6 +170,9 @@ app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => {
   console.log(`Token server listening on http://localhost:${PORT}`);
+  if (!ANTHROPIC_API_KEY) {
+    console.warn("  ⚠ No ANTHROPIC_API_KEY in .env — /api/questions will return 500.");
+  }
   if (!BOSON_API_KEY) {
     console.warn(
       "  ⚠ No API key found (set BOSON_API_KEY or BOSON_API_KEY_FILE in .env) — /api/token will return 500.",

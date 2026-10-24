@@ -11,6 +11,7 @@ import {
   transcriptReducer,
   type TranscriptState,
 } from "./state/transcriptStore";
+import { SERVER } from "./realtime/events";
 import { DebugDrawer } from "./ui/DebugDrawer";
 import { MicButton } from "./ui/MicButton";
 import { SessionPanel } from "./ui/SessionPanel";
@@ -59,6 +60,34 @@ function saidClosing(reply: string, closing: string): boolean {
   return hits / target.length >= 0.8;
 }
 
+/** The questions box as a list: one per line, blanks dropped. */
+function splitQuestions(text: string): string[] {
+  return text
+    .split("\n")
+    .map((q) => q.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Ask Claude Haiku 5.5 (through our server) what to add to and remove from
+ * the questions not asked yet.
+ */
+async function fetchQuestionChanges(payload: {
+  context: string;
+  asked: string[];
+  remaining: string[];
+  transcript: string;
+}): Promise<{ add: string[]; remove: string[] }> {
+  const res = await fetch("/api/questions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+  return { add: body.add ?? [], remove: body.remove ?? [] };
+}
+
 /** Ask our own server for a fresh ephemeral key. One per connection. */
 async function fetchToken(): Promise<string> {
   const res = await fetch("/api/token");
@@ -74,6 +103,10 @@ export default function App() {
   const [closeMessage, setCloseMessage] = useState<string | null>(null);
   const [text, setText] = useState("Hi! Say something short so I can check my speakers.");
   const [transcript, setTranscript] = useState<TranscriptState>(emptyTranscript);
+  // The latest transcript, readable from event callbacks without waiting for a render.
+  const transcriptRef = useRef<TranscriptState>(emptyTranscript);
+  // What Claude did last, shown next to the questions box.
+  const [claudeStatus, setClaudeStatus] = useState("not called yet");
   const [micActive, setMicActive] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
@@ -94,6 +127,39 @@ export default function App() {
   const closingRef = useRef(closing);
   closingRef.current = closing;
 
+  /**
+   * Send the transcript and the question list to Claude, then apply its
+   * changes to the questions not asked yet. Asked questions stay where they
+   * are, so the "next question" index keeps pointing at the right line.
+   */
+  async function refreshQuestions(): Promise<void> {
+    const before = splitQuestions(questionsRef.current);
+    const askedCount = Math.min(questionIndexRef.current, before.length);
+    setClaudeStatus("updating…");
+    try {
+      const { add, remove } = await fetchQuestionChanges({
+        context: instructionsRef.current,
+        asked: before.slice(0, askedCount),
+        remaining: before.slice(askedCount),
+        transcript: toPlainText(transcriptRef.current),
+      });
+      // Re-read the list: you may have edited it, or a question may have been
+      // sent, while Claude was thinking.
+      const now = splitQuestions(questionsRef.current);
+      const asked = now.slice(0, Math.min(questionIndexRef.current, now.length));
+      const drop = new Set(remove.map((q) => q.trim().toLowerCase()));
+      const remaining = now
+        .slice(asked.length)
+        .filter((q) => !drop.has(q.toLowerCase()));
+      const updated = [...asked, ...remaining, ...add.map((q) => q.trim())].join("\n");
+      questionsRef.current = updated;
+      setQuestions(updated);
+      setClaudeStatus(`last update ${new Date().toLocaleTimeString(undefined, { hour12: false })}: +${add.length} −${remove.length}`);
+    } catch (e) {
+      setClaudeStatus(`error: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   // The client outlives re-renders, so it lives in a ref rather than state.
   const clientRef = useRef<RealtimeClient | null>(null);
   if (!clientRef.current) {
@@ -103,10 +169,7 @@ export default function App() {
       speakFirst: true,
       endsSession: (reply) => saidClosing(reply, closingRef.current),
       nextInstructions: () => {
-        const list = questionsRef.current
-          .split("\n")
-          .map((q) => q.trim())
-          .filter(Boolean);
+        const list = splitQuestions(questionsRef.current);
         // The closing line counts as one more step after the last question.
         const steps = closingRef.current.trim() ? [...list, closingRef.current.trim()] : list;
         const i = questionIndexRef.current;
@@ -131,7 +194,11 @@ export default function App() {
       // the client knows nothing about the transcript, and the transcript knows
       // nothing about sockets.
       onServerEvent: (evt) => {
-        setTranscript((s) => transcriptReducer(s, evt, Date.now()));
+        const next = transcriptReducer(transcriptRef.current, evt, Date.now());
+        transcriptRef.current = next;
+        setTranscript(next);
+        // Your words just arrived: let Claude revise the questions not yet asked.
+        if (evt.type === SERVER.transcriptionCompleted) void refreshQuestions();
       },
     });
   }
@@ -188,7 +255,8 @@ export default function App() {
       <label className="field">
         <span>
           Questions — one per line; after you stop speaking, the next one is sent in a new
-          session.update (sent so far: {questionIndex})
+          session.update (sent so far: {questionIndex}). Claude Haiku 5.5 edits the ones not
+          yet asked after each of your turns — {claudeStatus}
         </span>
         <textarea value={questions} onChange={(e) => setQuestions(e.target.value)} rows={4} />
       </label>

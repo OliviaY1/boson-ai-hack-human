@@ -3,7 +3,11 @@ import {
   describeClose,
   functionCallOutput,
   inputAudioAppend,
+  deleteItem,
+  newScriptItemId,
   responseCreate,
+  SCRIPT_METADATA,
+  scriptRequestItem,
   scriptResponse,
   truncateItem,
   userTextItem,
@@ -118,6 +122,10 @@ export class RealtimeClient {
    */
   private sessionReady = false;
   private scriptSent = false;
+  /** The user request carrying the script, deleted once the reply ends. */
+  private scriptItemId: string | null = null;
+  /** The response.created id of the scripted reply (matched by metadata). */
+  private scriptResponseId: string | null = null;
 
   constructor(callbacks: RealtimeCallbacks) {
     this.cb = callbacks;
@@ -164,6 +172,8 @@ export class RealtimeClient {
     this.connecting = true;
     this.sessionReady = false;
     this.scriptSent = false;
+    this.scriptItemId = null;
+    this.scriptResponseId = null;
     this.setState("connecting");
 
     // Must happen inside the user gesture that triggered this call, or the
@@ -264,13 +274,19 @@ export class RealtimeClient {
         this.maybeSpeakScript();
         break;
 
-      case SERVER.responseCreated:
+      case SERVER.responseCreated: {
+        // SCRIPT CONTROL: remember which response is the scripted one.
+        const r = evt.response as { id?: string; metadata?: { source?: string } | null } | undefined;
+        if (r?.metadata?.source === SCRIPT_METADATA.source && typeof r.id === "string") {
+          this.scriptResponseId = r.id;
+        }
         // A new assistant turn. Zero the played-sample counter so the truncate
         // maths below measures into *this* reply, not the whole session.
         this.player.reset();
         this.toolBatch = null;
         this.setActivity("thinking");
         break;
+      }
 
       case SERVER.functionCallArgsDone:
         this.onFunctionCallArgsDone(evt);
@@ -325,8 +341,9 @@ export class RealtimeClient {
   // --- script control --------------------------------------------------------
 
   /**
-   * Ask the model to say the script, through the same `response.create` the
-   * rest of the app uses — with per-response `instructions` carrying the text.
+   * Ask the model to say the script: a user request item plus a
+   * `response.create` with per-response `instructions` (see scriptResponse in
+   * events.ts for why both). The request item is deleted in onResponseDone.
    *
    * Nothing else changes for this turn. Its audio goes through the same ring
    * buffer, its transcript through the same reducer, and if you start talking
@@ -341,7 +358,9 @@ export class RealtimeClient {
       this.info("Script box is empty — waiting for you to speak first.");
       return;
     }
-    this.info(`Speaking the script via response.create (${script.length} chars).`);
+    this.info(`Speaking the script (${script.length} chars).`);
+    this.scriptItemId = newScriptItemId();
+    this.send(scriptRequestItem(script, this.scriptItemId));
     this.send(scriptResponse(script));
     this.setActivity("thinking");
   }
@@ -407,6 +426,15 @@ export class RealtimeClient {
    * The turn is over. If it contained tool calls, this is where we answer them.
    */
   private onResponseDone(evt: ServerEvent): void {
+    // SCRIPT CONTROL: the scripted reply is over (completed or interrupted), so
+    // the request that produced it can leave the history.
+    const doneId = (evt.response as { id?: string } | undefined)?.id;
+    if (this.scriptItemId && doneId && doneId === this.scriptResponseId) {
+      this.send(deleteItem(this.scriptItemId));
+      this.scriptItemId = null;
+      this.scriptResponseId = null;
+    }
+
     // ⚠ The double-fire. Tool calls that already arrived via
     // function_call_arguments.done can appear AGAIN in response.done's output
     // list. We still walk it — occasionally a call shows up only here — but

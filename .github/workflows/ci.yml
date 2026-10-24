@@ -94,6 +94,8 @@ jobs:
                     + ($status[$rid] // "unknown") + "]: " + (.transcript | clean)
                 elif .type == "input_audio_buffer.speech_started" then
                   "vad: speech_started"
+                elif .type == "conversation.item.deleted" then
+                  "history: deleted " + .item_id
                 elif .type == "response.done" and .response.id == $sid then
                   "scripted response " + .response.status + ", streamed text: "
                     + ([$all[] | select(.type == "response.output_audio_transcript.delta"

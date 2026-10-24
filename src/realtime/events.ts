@@ -157,33 +157,60 @@ export function responseCreate(): ClientEvent {
 /**
  * SCRIPT CONTROL — make the model say a given line, as an ordinary turn.
  *
- * Every way the API offers to influence what the model says was considered:
+ * The API's ways to influence what the model says, and why this uses the mix
+ * it does:
  *
  *  - `session.update` → `instructions`: the system prompt. It applies to every
  *    turn, so the line would leak into the rest of the conversation.
  *  - `conversation.item.create` with an assistant `text` item: writes the line
  *    into history only. Creating an item never produces audio, and a
  *    response.create afterwards makes the model continue *after* it.
- *  - `response.create` → `response.input`: appends a user message, so the
- *    history would claim the user asked for the line.
- *  - `response.create` → `response.instructions`: a system prompt for this one
- *    response only. Nothing extra lands in the history; what remains is the
- *    assistant item the model actually spoke.
+ *  - `response.create` → `response.instructions` on its own: verified against
+ *    the live API on 2026-10-24, a long paragraph was read back word for word,
+ *    but "What's your name?" came out as "Hello! How can I assist you today?",
+ *    with two different wordings of the instruction.
  *
- * The last one is what this uses. The result is a normal response: same
- * output_item.added, same audio deltas, same transcript events — so playback,
- * the transcript, and barge-in (flush + conversation.item.truncate) all apply
- * to it unchanged. It is also how the tutorial's own LiveKit agent speaks first
- * (`generate_reply(instructions=…)` in livekit/agent.py).
+ * So the client sends three things:
  *
- * `metadata` is echoed back on `response.created`, which makes the scripted
- * turn easy to pick out in the debug drawer and in probe captures.
+ *  1. `conversation.item.create` — a user request carrying the line, with an
+ *     id we choose (scriptRequestItem). The model follows a user request to
+ *     say something far more reliably than an instruction on an empty
+ *     conversation.
+ *  2. `response.create` with per-response `instructions` saying the same
+ *     thing (scriptResponse), tagged with `metadata` so the reply can be
+ *     recognised when `response.created` echoes it back.
+ *  3. `conversation.item.delete` of that request once the reply has ended —
+ *     completed or cut off — so the history holds only what Higgs said, not
+ *     the stage direction that produced it.
+ *
+ * The reply itself is a normal response: same output_item.added, audio
+ * deltas and transcript events, so playback, the transcript, and barge-in
+ * (flush + conversation.item.truncate) apply to it unchanged.
  */
 export const SCRIPT_METADATA = { source: "script" } as const;
 
-// Kept short and direct on purpose. A longer, rule-heavy version (verified
-// 2026-10-24 against the live API) read a long paragraph back verbatim but
-// turned the short question "What's your name?" into a generic greeting.
+export function newScriptItemId(): string {
+  return `script_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+export function scriptRequestItem(script: string, itemId: string): ClientEvent {
+  return {
+    type: "conversation.item.create",
+    item: {
+      id: itemId,
+      type: "message",
+      role: "user",
+      content: [
+        { type: "input_text", text: `Say exactly this, word for word, and nothing else: "${script}"` },
+      ],
+    },
+  };
+}
+
+export function deleteItem(itemId: string): ClientEvent {
+  return { type: "conversation.item.delete", item_id: itemId };
+}
+
 export function scriptInstructions(script: string): string {
   return [
     "Your reply is fixed: say exactly the text inside the quotation marks below, word for",

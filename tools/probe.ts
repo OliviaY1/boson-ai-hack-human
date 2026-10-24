@@ -44,7 +44,10 @@ import {
   describeClose,
   functionCallOutput,
   inputAudioAppend,
+  deleteItem,
+  newScriptItemId,
   responseCreate,
+  scriptRequestItem,
   scriptResponse,
   userTextItem,
 } from "../src/realtime/events";
@@ -254,6 +257,10 @@ async function main() {
    * network, and the probe would stop one reply too early.
    */
   let extraResponsesExpected = 0;
+  // SCRIPT CONTROL: same bookkeeping as RealtimeClient — delete the request
+  // item once the scripted reply has ended.
+  let scriptItemId: string | null = null;
+  let scriptResponseId: string | null = null;
 
   const ws = new WebSocket(WS_URL, ["realtime", `bai-client-secret.${key}`]);
   const send = (evt: unknown) => ws.send(JSON.stringify(evt));
@@ -284,7 +291,18 @@ async function main() {
       console.log("---\n");
       sessionReady();
     }
-    if (evt.type === "response.created") responsesCreated++;
+    if (evt.type === "response.created") {
+      responsesCreated++;
+      const r = evt.response as { id?: string; metadata?: { source?: string } | null } | undefined;
+      if (r?.metadata?.source === "script" && r.id) scriptResponseId = r.id;
+    }
+    if (evt.type === "response.done" && scriptItemId) {
+      const id = (evt.response as { id?: string } | undefined)?.id;
+      if (id && id === scriptResponseId) {
+        send(deleteItem(scriptItemId));
+        scriptItemId = null;
+      }
+    }
 
     // Run tools, the same way the browser does — same registry, same
     // handled-call_id guard. Without this the probe would stop at the tool
@@ -381,6 +399,8 @@ async function main() {
     } else if (turn.kind === "script") {
       // Exactly what the browser sends for the Script box.
       console.log(`\n>>> script: ${JSON.stringify(turn.value)}\n`);
+      scriptItemId = newScriptItemId();
+      send(scriptRequestItem(turn.value, scriptItemId));
       send(scriptResponse(turn.value));
     } else {
       const samples =

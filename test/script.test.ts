@@ -158,6 +158,14 @@ describe("RealtimeClient script control", () => {
 
     ws.receive({ type: "session.created", session: {} });
     expect(ws.sent.filter(isScripted)).toHaveLength(1);
+
+    // The request item goes first, with our own id, then the response.create.
+    const types = ws.sent.map((e) => e.type);
+    expect(types.slice(-2)).toEqual(["conversation.item.create", "response.create"]);
+    const request = ws.sentOfType("conversation.item.create")[0].item as { id: string; role: string };
+    expect(request.role).toBe("user");
+    expect(request.id).toMatch(/^script_/);
+    expect(JSON.stringify(request)).toContain("What's your name?");
   });
 
   it("waits for the mic when session.created comes first, and reads the box at send time", async () => {
@@ -208,6 +216,7 @@ describe("RealtimeClient script control", () => {
     ws.receive({ type: "session.created", session: {} });
     await client.startMic();
     expect(ws.sentOfType("response.create")).toHaveLength(0);
+    expect(ws.sentOfType("conversation.item.create")).toHaveLength(0);
   });
 
   it("interrupts a scripted turn exactly like any other: flush, truncate, no response.create", async () => {
@@ -261,5 +270,12 @@ describe("RealtimeClient script control", () => {
     const items = toList(state);
     expect(items.map((i) => i.kind)).toEqual(["assistant", "user"]);
     expect(items[0]).toMatchObject({ text: "What's your", status: "interrupted" });
+
+    // Once the cut-off reply ends, the request that produced it is deleted.
+    const requestId = (ws.sentOfType("conversation.item.create")[0].item as { id: string }).id;
+    ws.receive({ type: "response.done", response: { id: "resp_script", status: "cancelled" } });
+    expect(ws.sentOfType("conversation.item.delete")).toEqual([
+      { type: "conversation.item.delete", item_id: requestId },
+    ]);
   });
 });

@@ -73,30 +73,12 @@ export const NETWORK_EXPERTS: Expert[] = [
     source: "AlphaSights",
   },
   {
-    id: "e-jon",
-    name: "Jonathan Weiss",
-    title: "Operating Partner, Healthcare PE",
-    phone: "+1 (555) 010-6625",
-    description:
-      "Led value-creation plans for two dental platforms, with a focus on procurement and revenue cycle.",
-    source: "AlphaSights",
-  },
-  {
     id: "e-linda",
     name: "Linda Hart",
     title: "Former Lead Hygienist, Multi-site Dental Group",
     phone: "+1 (555) 010-3394",
     description:
       "15 years as a dental hygienist, including four in a DSO-owned clinic; close view of frontline staffing.",
-    source: "Third Bridge",
-  },
-  {
-    id: "e-elena",
-    name: "Elena Novak",
-    title: "Independent Practice Owner (sold to DSO, 2022)",
-    phone: "+1 (555) 010-5517",
-    description:
-      "Owned and sold a three-chair practice; can speak to seller motivations and post-acquisition experience.",
     source: "Third Bridge",
   },
 ];

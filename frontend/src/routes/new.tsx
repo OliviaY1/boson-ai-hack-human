@@ -3,7 +3,7 @@ import { ArrowRight, Info, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { AppShell, PageHeader } from "@/components/app-shell";
 import { Button, Card, Input, Label, Textarea } from "@/components/ui-kit";
-import { NETWORKS, SAMPLE_COMPANY, SAMPLE_THESIS } from "@/lib/mock-data";
+import { NETWORKS, OAKVILLE_COMPANY, OAKVILLE_THESIS } from "@/lib/mock-data";
 import { uid } from "@/lib/mock-service";
 import { useStore } from "@/lib/store";
 
@@ -26,8 +26,9 @@ export const Route = createFileRoute("/new")({
 });
 
 function NewDiligence() {
-  const [company, setCompany] = useState("");
-  const [thesis, setThesis] = useState("");
+  // The demo thesis (Oakville Veterinary Group) is filled in by default.
+  const [company, setCompany] = useState(OAKVILLE_COMPANY);
+  const [thesis, setThesis] = useState(OAKVILLE_THESIS);
   const { addProject } = useStore();
   const navigate = useNavigate();
 
@@ -66,8 +67,8 @@ function NewDiligence() {
               variant="ghost"
               size="sm"
               onClick={() => {
-                setCompany(SAMPLE_COMPANY);
-                setThesis(SAMPLE_THESIS);
+                setCompany(OAKVILLE_COMPANY);
+                setThesis(OAKVILLE_THESIS);
               }}
             >
               <Wand2 /> Use Sample Thesis

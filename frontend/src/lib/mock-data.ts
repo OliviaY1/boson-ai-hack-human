@@ -625,6 +625,8 @@ function bare(
   };
 }
 
+export const OAKVILLE_COMPANY = "Oakville Veterinary Group";
+
 /** The demo thesis: each "Label: We believe …" line becomes one hypothesis. */
 export const OAKVILLE_THESIS = "Investment Thesis \u2014 Acquisition of an Oakville Veterinary Group\n\nMarket Attractiveness: We believe Oakville's affluent and growing population will drive sustained demand for high-quality veterinary services, supporting long-term revenue growth.\n\nCompetitive Positioning: We believe the target's established customer relationships, strong clinical reputation, and convenient locations will enable it to defend and expand its local market share.\n\nOrganic Revenue Growth: We believe the target can accelerate organic revenue growth by increasing appointment utilization, improving customer retention, and expanding its range of veterinary services.\n\nOperational Efficiency: We believe centralized administrative functions, optimized staffing, and improved procurement will reduce operating costs and expand EBITDA margins.\n\nTalent Retention: We believe the target can attract and retain skilled veterinarians through competitive compensation, professional development, and operational support, enabling sustainable clinical capacity.\n\nAcquisition-Led Expansion: We believe the target can serve as a regional consolidation platform by acquiring complementary veterinary practices across the Greater Toronto Area and realizing operational synergies.\n\nFinancial Returns: We believe sustainable organic growth, margin expansion, and disciplined acquisitions will generate attractive risk-adjusted returns over a five-year investment horizon without relying on exit multiple expansion.";
 
@@ -678,7 +680,7 @@ export function seedProjects(): DiligenceProject[] {
   // custom contacts on Expert Sources, then generate the plan).
   const oakville = bare(
     "oakville",
-    "Oakville Veterinary Group",
+    OAKVILLE_COMPANY,
     OAKVILLE_THESIS,
     "Draft",
     "2026-10-24T12:00:00Z",

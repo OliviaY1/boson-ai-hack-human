@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 
 /**
- * Settings for Alexa, the voice interviewer that places live calls through the
- * Higgs Realtime backend (see src/call/CallController.ts at the repo root).
- * Stored in this browser only, like the rest of the dashboard.
+ * Settings for the voice interviewer that places live calls through the Higgs
+ * Realtime backend (see src/call/CallController.ts at the repo root). Stored in
+ * this browser only, like the rest of the dashboard.
  *
- * `{company}` in either text is replaced with the project's company name.
+ * In the instructions and the closing, `{name}` becomes the interviewer's name
+ * and `{company}` the project's company.
  */
 export interface AlexaSettings {
+  /** What the interviewer is called, on the call and on screen. */
+  name: string;
   /** Greeting / system instructions, sent in the first session.update. */
   instructions: string;
   /** Said after the last question, or straight after a declined greeting; the call then ends. */
@@ -17,8 +20,9 @@ export interface AlexaSettings {
 }
 
 export const DEFAULT_ALEXA_SETTINGS: AlexaSettings = {
+  name: "Alexa",
   instructions:
-    'You are Alexa from a private equity firm. Say exactly: "Hi, I\'m Alexa from a private equity firm. Do you have one minute for a few quick questions about {company}?" Nothing else.',
+    'You are {name} from a private equity firm. Say exactly: "Hi, I\'m {name} from a private equity firm. Do you have one minute for a few quick questions about {company}?" Nothing else.',
   closing: "That's all my questions. Thank you so much for your time, have a great day!",
   avatarId: "builtin_claire_v1",
 };
@@ -32,9 +36,13 @@ export const AVATAR_OPTIONS: Array<{ id: string; label: string }> = [
 
 const KEY = "diligence-live:alexa:v1";
 
-export function fillCompany(text: string, company: string): string {
-  return text.split("{company}").join(company);
+/** Replace {name} and {company}. */
+export function fillPlaceholders(text: string, name: string, company: string): string {
+  return text.split("{name}").join(name).split("{company}").join(company);
 }
+
+/** The name to use: the saved one, or the default if it was left blank. */
+export const interviewerName = (s: AlexaSettings) => s.name.trim() || DEFAULT_ALEXA_SETTINGS.name;
 
 export function useAlexaSettings() {
   const [settings, setSettings] = useState<AlexaSettings>(DEFAULT_ALEXA_SETTINGS);

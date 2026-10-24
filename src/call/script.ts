@@ -25,9 +25,9 @@ export const DEFAULT_CLOSING =
 
 export type Audience = "customer" | "expert";
 
-/** The short instructions sent for each question. */
-export function questionInstructions(question: string): string {
-  return `You are Alexa, a market researcher. Say exactly: "${question}" Nothing else.`;
+/** The short instructions sent for each question. `name` is the interviewer's name. */
+export function questionInstructions(question: string, name = "Alexa"): string {
+  return `You are ${name}, a market researcher. Say exactly: "${question}" Nothing else.`;
 }
 
 /**
@@ -35,8 +35,8 @@ export function questionInstructions(question: string): string {
  * person agreed. It is sent when the greeting ends, before they answer, so the
  * code cannot know their answer yet.
  */
-export function firstQuestionInstructions(question: string, closing: string): string {
-  return `You are Alexa, a market researcher. If the person said no, declined, or has no time, say exactly: "${closing}" Otherwise say exactly: "${question}" Nothing else.`;
+export function firstQuestionInstructions(question: string, closing: string, name = "Alexa"): string {
+  return `You are ${name}, a market researcher. If the person said no, declined, or has no time, say exactly: "${closing}" Otherwise say exactly: "${question}" Nothing else.`;
 }
 
 /** Did this reply say this line? Compared word by word, ignoring case and punctuation. */

@@ -3,11 +3,11 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { CallController, type CallState } from "@higgs/call/CallController";
 import type { Audience } from "@higgs/call/script";
 import { Badge, Button, Select } from "@/components/ui-kit";
-import { fillCompany, useAlexaSettings } from "@/lib/alexa-settings";
+import { fillPlaceholders, interviewerName, useAlexaSettings } from "@/lib/alexa-settings";
 import type { DiligenceProject, Interview, InterviewQuestion, TranscriptTurn } from "@/lib/types";
 
 /**
- * A real voice call for one interview: Alexa (Higgs Realtime, optionally with a
+ * A real voice call for one interview: the interviewer (Higgs Realtime, optionally with a
  * Higgs Avatar) calls the interviewee, and Claude keeps the question list up
  * to date while they talk. The call itself lives in the shared
  * CallController (src/call/ at the repo root, also used by the debug page);
@@ -73,6 +73,7 @@ function mirror(iv: Interview, st: CallState, startedAt: number, kept: Interview
 
 export function useLiveCall(project: DiligenceProject, iv: Interview, setIv: SetIv) {
   const { settings, hydrated } = useAlexaSettings();
+  const name = interviewerName(settings);
   const [state, setState] = useState<CallState | null>(null);
   // Default to who Claude judged this person to be when it wrote the plan.
   const planned = project.plan?.experts.find((e) => e.expertId === iv.expertId)?.audience;
@@ -111,8 +112,9 @@ export function useLiveCall(project: DiligenceProject, iv: Interview, setIv: Set
     startedAt.current = Date.now();
     const c = new CallController(
       {
-        instructions: fillCompany(settings.instructions, project.company),
-        closing: fillCompany(settings.closing, project.company),
+        name,
+        instructions: fillPlaceholders(settings.instructions, name, project.company),
+        closing: fillPlaceholders(settings.closing, name, project.company),
         goal: goalFor(project, iv),
         audience,
         questions: open.map((q) => q.text),
@@ -124,7 +126,7 @@ export function useLiveCall(project: DiligenceProject, iv: Interview, setIv: Set
     ctrl.current = c;
     setIv(ivId, (i) => ({ ...i, live: true, status: "In Progress", topic: "Live call", transcript: [] }));
     await c.start();
-  }, [audience, iv, ivId, onChange, project, setIv, settings]);
+  }, [audience, iv, ivId, name, onChange, project, setIv, settings]);
 
   const stop = useCallback(async () => {
     await ctrl.current?.stop();
@@ -141,7 +143,7 @@ export function useLiveCall(project: DiligenceProject, iv: Interview, setIv: Set
   );
 
   const running = state?.phase === "starting" || state?.phase === "live";
-  return { state, running, start, stop, audience, setAudience, mediaRef, ready: hydrated };
+  return { state, running, start, stop, audience, setAudience, mediaRef, ready: hydrated, name };
 }
 
 export type LiveCall = ReturnType<typeof useLiveCall>;
@@ -155,9 +157,9 @@ export function LiveCallBar({ call }: { call: LiveCall }) {
       ? "Connecting…"
       : phase === "live"
         ? st?.activity === "speaking"
-          ? "Alexa is speaking"
+          ? `${call.name} is speaking`
           : st?.activity === "thinking"
-            ? "Alexa is thinking"
+            ? `${call.name} is thinking`
             : "Listening"
         : phase === "ended"
           ? "Call ended"
@@ -213,14 +215,16 @@ export function LiveCallBar({ call }: { call: LiveCall }) {
 export function AvatarView({
   mediaRef,
   state,
+  name,
 }: {
   mediaRef: RefObject<HTMLDivElement | null>;
   state: CallState | null;
+  name: string;
 }) {
   const a = state?.avatar;
   return (
     <div>
-      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Alexa</p>
+      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">{name}</p>
       <div
         ref={mediaRef}
         className="relative aspect-[3/4] w-full overflow-hidden rounded-md border bg-muted [&_video]:h-full [&_video]:w-full [&_video]:object-cover"

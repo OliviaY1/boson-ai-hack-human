@@ -21,7 +21,7 @@ import {
  * Higgs Avatar, and Claude keeping the question list up to date.
  *
  * It runs the same flow as the debug page (src/App.tsx):
- *   - Alexa speaks first (the greeting instructions in `instructions`)
+ *   - the interviewer (`name`) speaks first (the greeting instructions in `instructions`)
  *   - each time she finishes a reply, the first question she has not said yet
  *     goes out in a session.update, ready for her next turn
  *   - a question counts as said once her transcript matches it
@@ -32,6 +32,8 @@ import {
  */
 
 export interface CallConfig {
+  /** The interviewer's name, used in every per-step instruction. */
+  name: string;
   /** Greeting / system instructions for the first session.update. */
   instructions: string;
   closing: string;
@@ -271,12 +273,12 @@ export class CallController {
     const first = pending[0];
     if (!this.greetingAnswered) {
       this.greetingAnswered = true;
-      if (first && close) return firstQuestionInstructions(first.text, close);
+      if (first && close) return firstQuestionInstructions(first.text, close, this.config.name);
     }
-    if (first) return questionInstructions(first.text);
+    if (first) return questionInstructions(first.text, this.config.name);
     if (close && !this.closingSent) {
       this.closingSent = true;
-      return questionInstructions(close);
+      return questionInstructions(close, this.config.name);
     }
     return null;
   }
@@ -284,7 +286,7 @@ export class CallController {
   private onServerEvent(evt: ServerEvent): void {
     this.transcript = transcriptReducer(this.transcript, evt, Date.now());
 
-    // Alexa finished a reply: every question she actually said is now "said".
+    // The interviewer finished a reply: every question actually said is now "said".
     const said = evt["transcript"];
     if (evt.type === SERVER.audioTranscriptDone && typeof said === "string") {
       for (const r of this.rows) {

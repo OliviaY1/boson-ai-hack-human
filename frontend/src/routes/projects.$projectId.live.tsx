@@ -294,10 +294,15 @@ function InterviewDetail({
           <p className="mb-3 px-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Live transcript
           </p>
-          <TranscriptViewer project={project} interview={iv} highlightTurnId={highlightTurn} />
+          <TranscriptViewer
+            project={project}
+            interview={iv}
+            highlightTurnId={highlightTurn}
+            aiName={call.state ? call.name : undefined}
+          />
         </div>
         <div className="min-h-0 space-y-6 overflow-y-auto border-l bg-muted/30 px-4 py-5">
-          <AvatarView mediaRef={call.mediaRef} state={call.state} />
+          <AvatarView mediaRef={call.mediaRef} state={call.state} name={call.name} />
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Interview questions{call.running ? " · live" : ""}

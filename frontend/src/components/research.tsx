@@ -161,10 +161,13 @@ export function TranscriptViewer({
   project,
   interview,
   highlightTurnId,
+  aiName,
 }: {
   project: DiligenceProject;
   interview: Interview;
   highlightTurnId?: string | undefined;
+  /** The interviewer's name on a live call; the simulation shows "AI Interviewer". */
+  aiName?: string | undefined;
 }) {
   const expert = expertOf(project, interview.expertId);
   const end = useRef<HTMLDivElement>(null);
@@ -204,7 +207,7 @@ export function TranscriptViewer({
                   t.speaker === "ai" ? "text-primary" : "text-foreground",
                 )}
               >
-                {t.speaker === "ai" ? "AI Interviewer" : `Expert · ${expert?.name ?? ""}`}
+                {t.speaker === "ai" ? (aiName ?? "AI Interviewer") : `Expert · ${expert?.name ?? ""}`}
               </span>
               <span className="font-mono text-muted-foreground">{t.time}</span>
             </div>

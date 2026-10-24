@@ -1,9 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { AppShell, PageHeader } from "@/components/app-shell";
-import { Button, Card, ConfirmDialog, Label, Select, Textarea } from "@/components/ui-kit";
+import { Button, Card, ConfirmDialog, Input, Label, Select, Textarea } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
-import { AVATAR_OPTIONS, useAlexaSettings, type AlexaSettings } from "@/lib/alexa-settings";
+import {
+  AVATAR_OPTIONS,
+  interviewerName,
+  useAlexaSettings,
+  type AlexaSettings,
+} from "@/lib/alexa-settings";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -102,7 +107,7 @@ function Row({
 }
 
 /**
- * Alexa, the voice interviewer for live calls (Higgs Realtime + Higgs Avatar).
+ * The voice interviewer for live calls (Higgs Realtime + Higgs Avatar).
  * The system instructions open the call; the closing ends it.
  */
 function AlexaCard() {
@@ -116,12 +121,25 @@ function AlexaCard() {
 
   return (
     <div className="mt-10">
-      <p className="mb-1 font-semibold">Alexa — live call interviewer</p>
+      <p className="mb-1 font-semibold">{interviewerName(settings)} — live call interviewer</p>
       <p className="mb-4 text-sm text-muted-foreground">
-        Used when you start a live call from an interview. <code>{"{company}"}</code> is replaced
-        with the project&apos;s company.
+        Used when you start a live call from an interview. In the texts below,{" "}
+        <code>{"{name}"}</code> becomes the interviewer&apos;s name and <code>{"{company}"}</code>{" "}
+        the project&apos;s company.
       </p>
       <Card className="space-y-5 p-5">
+        <div className="space-y-1.5">
+          <Label htmlFor="alexa-name">Name</Label>
+          <Input
+            id="alexa-name"
+            value={draft.name}
+            placeholder="Alexa"
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          />
+          <p className="text-xs text-muted-foreground">
+            What the interviewer calls herself on the call, and what the dashboard shows.
+          </p>
+        </div>
         <div className="space-y-1.5">
           <Label htmlFor="alexa-instructions">System instructions (opening of the call)</Label>
           <Textarea
@@ -131,7 +149,8 @@ function AlexaCard() {
             onChange={(e) => setDraft({ ...draft, instructions: e.target.value })}
           />
           <p className="text-xs text-muted-foreground">
-            Sent to Higgs Realtime in the first session.update; Alexa speaks first. Keep it short.
+            Sent to Higgs Realtime in the first session.update; the interviewer speaks first. Keep
+            it short.
           </p>
         </div>
         <div className="space-y-1.5">
@@ -144,7 +163,7 @@ function AlexaCard() {
           />
           <p className="text-xs text-muted-foreground">
             Said after the last question, or right after the interviewee declines. The call ends once
-            Alexa has said it.
+            it has been said.
           </p>
         </div>
         <div className="space-y-1.5">
@@ -168,7 +187,7 @@ function AlexaCard() {
             disabled={!dirty}
             onClick={() => {
               save(draft);
-              setSaved("Alexa settings saved.");
+              setSaved("Interviewer settings saved.");
             }}
           >
             Save
@@ -177,7 +196,7 @@ function AlexaCard() {
             variant="ghost"
             onClick={() => {
               reset();
-              setSaved("Alexa settings reset to the defaults.");
+              setSaved("Interviewer settings reset to the defaults.");
             }}
           >
             Reset to defaults

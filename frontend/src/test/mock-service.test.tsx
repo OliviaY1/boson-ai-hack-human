@@ -118,7 +118,7 @@ describe("automatic interview agents", () => {
 describe("saved projects", () => {
   it("deleting one project leaves the others untouched", () => {
     const ps = seedProjects();
-    expect(withoutProject(ps, "northstar").map((p) => p.id)).toEqual(["harbor", "summit"]);
+    expect(withoutProject(ps, "northstar").map((p) => p.id)).toEqual(["harbor", "summit", "oakville"]);
     expect(withoutProject(ps, "not-saved")).toHaveLength(ps.length);
   });
 

@@ -67,9 +67,11 @@ describe("research rounds", () => {
     expect(generateMockFindings(startNextRound(done)).findings).toEqual(results.findings);
   });
 
-  it("proposes Round 2 only after every interview is completed, and keeps Round 1 findings", () => {
+  it("proposes Round 2 once an interview is completed, and keeps Round 1 findings", () => {
     const p = seedProjects()[0]!;
     expect(canRecommendNextRound(p)).toBe(false);
+    const oneDone = { ...p, interviews: p.interviews.map((iv, k) => (k === 0 ? completeMockInterview(iv) : iv)) };
+    expect(canRecommendNextRound(oneDone)).toBe(true);
     let ivs = p.interviews.map((i) => startMockInterview(i));
     for (let k = 0; k < 12; k++) ivs = ivs.map(adv);
     const done = { ...p, interviews: ivs.map(completeMockInterview) };

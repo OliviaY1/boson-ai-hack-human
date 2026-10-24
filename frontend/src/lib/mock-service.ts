@@ -49,10 +49,10 @@ export const withoutProject = (ps: DiligenceProject[], id: string) => ps.filter(
 export const missingSamples = (ps: DiligenceProject[]) =>
   seedProjects().filter((s) => !ps.some((p) => p.id === s.id));
 
+// Opening Findings means the consultant is done with this round, so one
+// completed interview is enough to propose the next one.
 export const canRecommendNextRound = (p: DiligenceProject) =>
-  !!p.plan?.approved &&
-  p.interviews.length > 0 &&
-  p.interviews.every((i) => i.status === "Completed");
+  !!p.plan?.approved && p.interviews.some((i) => i.status === "Completed");
 
 /** Proposes the next research round from completed findings. Returns new experts to add to the project. */
 export function generateNextRoundPlan(p: DiligenceProject): {
@@ -76,11 +76,54 @@ export function generateNextRoundPlan(p: DiligenceProject): {
       ),
     };
   }
+  const all = allHypotheses(p);
+  // With GPT-6's validation (Findings page), the next round targets what it found
+  // unresolved; its research gaps say what to establish. Otherwise, the template.
+  const gpt = p.thesisValidation;
+  if (gpt) {
+    const unresolved = gpt.hypotheses
+      .filter((h) => h.assessment !== "Supported")
+      .map((h) => ({ h, base: all.find((x) => x.id === h.id) }))
+      .filter((x): x is { h: (typeof gpt.hypotheses)[number]; base: InvestmentHypothesis } => !!x.base)
+      .slice(0, 3);
+    const hypotheses: InvestmentHypothesis[] = unresolved.map(({ h, base }, i) => {
+      const gap = gpt.gaps.find((g) => g.hypothesisId === h.id);
+      return {
+        id: `h-r${roundNo}-${i + 1}`,
+        title: `Resolve: ${base.title}`,
+        description: gap?.gap ?? h.rationale,
+        evidence: gap?.nextStep ?? base.evidence,
+        origin: `Refined from H${all.findIndex((x) => x.id === h.id) + 1} · ${h.assessment}`,
+        round: roundNo,
+      };
+    });
+    const used = new Set(p.plan?.experts.map((e) => e.expertId));
+    const pool = [
+      ...p.experts.filter((e) => !used.has(e.id)),
+      ...p.experts.filter((e) => used.has(e.id)),
+    ].slice(0, 2);
+    return {
+      plan: {
+        hypotheses,
+        experts: pool.map((e) => ({
+          expertId: e.id,
+          reason: "Additional perspective to close the research gaps GPT-6 identified.",
+          hypothesisIds: hypotheses.map((h) => h.id),
+          objectives: "Resolve the hypotheses the first round left unsupported.",
+          questions: hypotheses.map((h) => ({
+            id: uid("q"),
+            text: `What have you seen on ${h.title.replace("Resolve: ", "").toLowerCase()}?`,
+          })),
+        })),
+        approved: false,
+      },
+      newExperts: [],
+    };
+  }
   const { validation } = generateMockFindings(p);
   const open = validation
     .filter((v) => v.assessment === "Insufficient Evidence" || v.assessment === "Mixed Evidence")
     .slice(0, 3);
-  const all = allHypotheses(p);
   const hypotheses: InvestmentHypothesis[] = open.map((v, i) => ({
     id: `h-r${roundNo}-${i + 1}`,
     title: `Resolve: ${v.hypothesis.title}`,

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, Compass, FileText, Loader2, RefreshCw } from "lucide-react";
 import { expertOf } from "@/components/research";
 import { AssessmentBadge } from "@/components/status";
@@ -77,18 +77,23 @@ function FindingsPage() {
         {roundNo > 1 && <Badge tone="outline">Consolidated across all research rounds</Badge>}
       </div>
 
-      <LlmFindings project={project} update={update} />
+      <LlmFindings
+        project={project}
+        update={update}
+        nextRound={
+          canRecommendNextRound(project) ? (
+            <NextRoundCard
+              project={project}
+              onCreate={() => {
+                update(startNextRound);
+                clearRound(projectId);
+                navigate({ to: "/projects/$projectId/plan", params: { projectId } });
+              }}
+            />
+          ) : null
+        }
+      />
 
-      {canRecommendNextRound(project) && project.thesisValidation && (
-        <NextRoundCard
-          project={project}
-          onCreate={() => {
-            update(startNextRound);
-            clearRound(projectId);
-            navigate({ to: "/projects/$projectId/plan", params: { projectId } });
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -110,6 +115,11 @@ function NextRoundCard({ project, onCreate }: { project: DiligenceProject; onCre
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             New hypotheses to explore
           </p>
+          {!plan.hypotheses.length && (
+            <p className="text-sm text-muted-foreground">
+              Every hypothesis is supported; a further round would only add corroboration.
+            </p>
+          )}
           {plan.hypotheses.map((h, i) => (
             <div key={h.id}>
               <div className="flex flex-wrap items-center gap-2">
@@ -127,6 +137,12 @@ function NextRoundCard({ project, onCreate }: { project: DiligenceProject; onCre
                 )}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">{h.description}</p>
+              {project.thesisValidation && h.evidence && (
+                <p className="mt-1 text-sm">
+                  <span className="font-medium">Who to call and what to ask: </span>
+                  <span className="text-muted-foreground">{h.evidence}</span>
+                </p>
+              )}
               {!!h.basisFindingIds?.length && (
                 <p className="mt-1.5 text-xs text-muted-foreground">
                   Prompted by:{" "}
@@ -142,8 +158,10 @@ function NextRoundCard({ project, onCreate }: { project: DiligenceProject; onCre
         <div className="flex items-center justify-between gap-4 border-t bg-primary-soft/50 px-5 py-4">
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
             <Compass className="size-4 text-primary" /> The Round {roundNo} plan proposes{" "}
-            {plan.experts.length} experts with new interview questions. You can edit everything
-            before approving.
+            {plan.experts.length} {plan.experts.length === 1 ? "person" : "people"} from your contacts
+            with new interview questions; add the profiles suggested above as contacts first if you
+            need them. You can edit everything before approving, and GPT-6 rewrites the questions
+            when you regenerate them.
           </p>
           <Button onClick={onCreate}>
             Create Round {roundNo} Plan <ArrowRight />
@@ -166,9 +184,12 @@ function NextRoundCard({ project, onCreate }: { project: DiligenceProject; onCre
 function LlmFindings({
   project,
   update,
+  nextRound,
 }: {
   project: DiligenceProject;
   update: (fn: (p: DiligenceProject) => DiligenceProject) => void;
+  /** The "Recommended next round" card; shown only with a finished GPT-6 result. */
+  nextRound: ReactNode;
 }) {
   const v = useThesisValidation(project, update);
   const working = v.loading || (v.hasEvidence && v.stale && !v.error);
@@ -176,6 +197,7 @@ function LlmFindings({
     <>
       <ThesisValidationSection project={project} v={v} working={working} />
       {!working && v.result && <ResearchGapsSection project={project} result={v.result} />}
+      {!working && v.result && nextRound}
     </>
   );
 }

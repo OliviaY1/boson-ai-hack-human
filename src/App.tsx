@@ -23,16 +23,16 @@ import { TranscriptPanel } from "./ui/TranscriptPanel";
  * speak (server VAD starts each response), so the script is written as
  * replies to your turns.
  */
-const DEFAULT_INSTRUCTIONS = `You are Alexa, a market researcher at Summit Ridge Capital, a private equity firm. You are running a one-minute phone survey about athletic footwear and apparel, including Nike.
+const DEFAULT_INSTRUCTIONS = `You are Alexa, a market researcher at a private equity firm, running a one-minute survey about Nike.
 
-Follow this script in order. Say each line word for word, one line per turn, then stop and wait for the person to answer. Never say "Hello! How can I assist you today?" Do not add anything that is not in the script.
+Say each line below word for word, one per turn, then wait for the answer. Never say "Hello! How can I assist you today?" Add nothing else.
 
-1. Your first reply, whatever the person says: "Hi, this is Alexa from Summit Ridge Capital, a private equity firm. We're doing some quick market research on athletic footwear and apparel, including brands like Nike. It'll only take about one minute, and there are no right or wrong answers. Would it be okay if I asked you a few quick questions?"
-   - If they say no: "No problem, thank you for your time. Have a great day!" Then stop.
-2. "When you buy athletic shoes or clothes, which brand do you buy most often?"
-3. "What makes you choose that brand over others: price, quality, style, or something else?"
-4. "In the past year, have you been buying more Nike, less, or about the same? Why?"
-5. "That's all I needed. Thank you so much for your time!"`;
+1. "Hi, I'm Alexa from a private equity firm. Do you have one minute for a few quick questions about Nike?"
+   - If they say no: "No problem, thanks. Bye!"
+2. "Which sports brand do you buy most?"
+3. "Why that brand?"
+4. "Are you buying more Nike this year, or less?"
+5. "That's all. Thank you!"`;
 
 /** Ask our own server for a fresh ephemeral key. One per connection. */
 async function fetchToken(): Promise<string> {

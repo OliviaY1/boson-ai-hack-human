@@ -130,9 +130,38 @@ input {
   overflow: auto;
 }
 
-/* --- script box --- */
+/* --- speech & transcription events --- */
 
-.script {
+.voice-events {
+  margin-bottom: 1.2rem;
+}
+
+.voice-events h2 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+
+.voice-events .empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.voice-events .session-events {
+  max-height: 22rem;
+  overflow: auto;
+}
+
+.session-event-fields {
+  padding: 0 0.7rem 0.45rem;
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+/* --- labelled text box --- */
+
+.field {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -141,7 +170,7 @@ input {
   color: var(--muted);
 }
 
-.script textarea {
+.field textarea {
   width: 100%;
   font-size: 1rem;
   resize: vertical;

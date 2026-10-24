@@ -33,7 +33,7 @@ export function SessionPanel({
 
   return (
     <section className="session">
-      <label className="script">
+      <label className="field">
         <span>System instructions (sent with session.update)</span>
         <textarea value={instructions} onChange={(e) => onChange(e.target.value)} rows={5} />
       </label>

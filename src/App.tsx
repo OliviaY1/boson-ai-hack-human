@@ -13,6 +13,7 @@ import {
 import { DebugDrawer } from "./ui/DebugDrawer";
 import { MicButton } from "./ui/MicButton";
 import { SessionPanel } from "./ui/SessionPanel";
+import { VoiceEventsPanel } from "./ui/VoiceEventsPanel";
 import { SYSTEM_PROMPT } from "./realtime/sessionConfig";
 import { StatusBar } from "./ui/StatusBar";
 import { TranscriptPanel } from "./ui/TranscriptPanel";
@@ -35,11 +36,6 @@ export default function App() {
   const [micActive, setMicActive] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
-  // SCRIPT CONTROL: what Higgs says first. The client reads it through a ref,
-  // at the moment it sends it, so edits are picked up without re-wiring.
-  const [script, setScript] = useState("What's your name?");
-  const scriptRef = useRef(script);
-  scriptRef.current = script;
   // SYSTEM INSTRUCTIONS: sent in the first session.update on connect, and again
   // whenever "Send session.update" is pressed.
   const [instructions, setInstructions] = useState(SYSTEM_PROMPT);
@@ -51,7 +47,6 @@ export default function App() {
   if (!clientRef.current) {
     clientRef.current = new RealtimeClient({
       tokenProvider: fetchToken,
-      scriptProvider: () => scriptRef.current,
       instructionsProvider: () => instructionsRef.current,
       onConnectionState: setConnection,
       onActivity: setActivity,
@@ -107,16 +102,6 @@ export default function App() {
         it found.
       </p>
 
-      <label className="script">
-        <span>Script</span>
-        <textarea
-          value={script}
-          onChange={(e) => setScript(e.target.value)}
-          rows={2}
-          placeholder="What Higgs says first, once you connect and start the microphone…"
-        />
-      </label>
-
       <SessionPanel
         instructions={instructions}
         onChange={setInstructions}
@@ -159,6 +144,8 @@ export default function App() {
           </button>
         </div>
       </details>
+
+      <VoiceEventsPanel entries={log} />
 
       <TranscriptPanel state={transcript} />
 

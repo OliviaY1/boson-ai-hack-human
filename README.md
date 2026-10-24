@@ -8,27 +8,16 @@ You need to be comfortable with JavaScript/TypeScript, React, and `fetch`. You d
 need to know anything about audio programming, and you do not need to have used WebSockets
 before — both are explained where they first come up.
 
-## This fork: script control
+## This fork: editable session instructions and live VAD events
 
-This copy of the tutorial adds one thing: a **Script** box at the top of the app. Type a
-line, press **Connect**, then **Start microphone** — Higgs says your line first, then the
-conversation carries on as normal, and you can talk over the line to interrupt it.
+Two additions to the finished app:
 
-The line is sent per response, not through the system prompt: once the session is
-acknowledged and the microphone is live, the client sends one `response.create` whose
-`response.instructions` tells the model to say the script verbatim
-(`scriptResponse()` in `src/realtime/events.ts`, sent from `RealtimeClient`). The reply is
-an ordinary response, so playback, the transcript and barge-in handle it unchanged.
-
-```bash
-npm install
-cp .env.example .env    # add BOSON_API_KEY
-npm run dev             # open http://localhost:5173
-
-# headless, against the real API:
-npm run probe -- --script "What's your name?" --say "My name is Olivia."
-npm run probe -- --script "<a long paragraph>" --barge "Sorry, can I stop you there?"
-```
+- **System instructions** box. Its text is the `instructions` in the first `session.update`
+  on connect; **Send session.update** sends it again mid-session. Every `session.update`
+  sent and every `session.created` / `session.updated` received is listed under the box.
+- **Speech & transcription** panel. Lists `input_audio_buffer.speech_started`,
+  `input_audio_buffer.speech_stopped` and
+  `conversation.item.input_audio_transcription.completed` as they arrive.
 
 ## The parts
 
@@ -89,7 +78,7 @@ what to do when something does not work.
 ## Other commands
 
 ```bash
-npm test          # 41 unit tests
+npm test          # 31 unit tests
 npm run typecheck # TypeScript, no emit
 npm run build     # production build
 npm run probe     # open a real session headlessly and print every event

@@ -26,7 +26,7 @@ export const Route = createFileRoute("/new")({
 });
 
 function NewDiligence() {
-  // The demo thesis (Oakville Veterinary Group) is filled in by default.
+  // The demo (Oakville Lakeshore Animal Hospital and its thesis) is filled in by default.
   const [company, setCompany] = useState(OAKVILLE_COMPANY);
   const [thesis, setThesis] = useState(OAKVILLE_THESIS);
   const { addProject } = useStore();

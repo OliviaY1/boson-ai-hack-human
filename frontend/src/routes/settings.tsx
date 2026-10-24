@@ -40,7 +40,7 @@ function SettingsPage() {
         <Card className="divide-y">
           <Row
             title="Sample projects"
-            description="Add the Oakville Veterinary Group demo (the real thesis) and the Northstar Dental, Harbor Veterinary and Summit Physio examples. Projects you already have are kept."
+            description="Add the Oakville Lakeshore Animal Hospital demo (the real thesis) and the Northstar Dental, Harbor Veterinary and Summit Physio examples. Projects you already have are kept."
             action={
               <Button
                 variant="secondary"

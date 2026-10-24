@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import type { Express, Response } from "express";
-import { loadLiveKitConfig, viewerToken } from "./avatar";
 
 /**
  * Interview sessions shared between two tabs:
@@ -8,7 +7,6 @@ import { loadLiveKitConfig, viewerToken } from "./avatar";
  *   consultant  POST /api/interviews          create a session (the call's config)
  *               GET  /api/interviews/:id/events   watch it live (Server-Sent Events)
  *               POST /api/interviews/:id/end      ask the interviewee's tab to hang up
- *               POST /api/interviews/:id/viewer   watch-only LiveKit token for the avatar
  *   interviewee GET  /api/interviews/:id          load the config, then run the call
  *               POST /api/interviews/:id/state    publish the call's state as it changes
  *               GET  /api/interviews/:id/events   (also) hear the consultant's "end"
@@ -83,17 +81,6 @@ export function registerInterviewRoutes(app: Express): void {
     s.endRequested = true;
     broadcast(s);
     return res.json({ ok: true });
-  });
-
-  app.post("/api/interviews/:id/viewer", (req, res) => {
-    const s = sessions.get(req.params.id);
-    const livekit = loadLiveKitConfig();
-    const roomName = String(req.body?.roomName ?? "");
-    if (!s || !livekit || !roomName) return res.status(400).json({ error: "no avatar room to watch" });
-    return res.json({
-      url: livekit.url,
-      token: viewerToken(livekit, roomName, `consultant-${randomBytes(3).toString("hex")}`),
-    });
   });
 
   app.get("/api/interviews/:id/events", (req, res) => {

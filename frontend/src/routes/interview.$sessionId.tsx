@@ -138,7 +138,7 @@ function IntervieweePage() {
 
       <div className="grid gap-6 md:grid-cols-[220px_1fr]">
         <div className="space-y-4">
-          <AvatarView mediaRef={mediaRef} state={st} name={name} muted={false} />
+          <AvatarView mediaRef={mediaRef} state={st} name={name} />
           {phase === "ended" ? (
             <Card className="p-4 text-center">
               <p className="font-medium">Interview finished</p>

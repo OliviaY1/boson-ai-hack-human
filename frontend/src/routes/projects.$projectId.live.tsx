@@ -18,7 +18,7 @@ import {
   TranscriptViewer,
 } from "@/components/research";
 import { InterviewStatusBadge } from "@/components/status";
-import { AvatarView, LiveCallBar, useLiveCall } from "@/components/live-call";
+import { LiveCallBar, useLiveCall } from "@/components/live-call";
 import {
   Badge,
   Button,
@@ -305,7 +305,6 @@ function InterviewDetail({
           />
         </div>
         <div className="min-h-0 space-y-6 overflow-y-auto border-l bg-muted/30 px-4 py-5">
-          <AvatarView mediaRef={call.mediaRef} state={call.state} name={call.name} />
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Interview questions{call.running ? " · live" : ""}

@@ -187,14 +187,3 @@ export async function stopAvatar(boson: { baseUrl: string; apiKey: string }, ses
   return text ? JSON.parse(text) : {};
 }
 
-/**
- * A watch-only token for the consultant's tab: it may subscribe to the
- * avatar's video, and may not publish anything.
- */
-export function viewerToken(cfg: LiveKitConfig, roomName: string, identity: string): string {
-  return liveKitToken(cfg, {
-    identity,
-    ttlSeconds: 2 * 60 * 60,
-    video: { roomJoin: true, room: roomName, canPublish: false, canPublishData: false, canSubscribe: true },
-  });
-}

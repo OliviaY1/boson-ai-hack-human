@@ -2,7 +2,6 @@ import { Clock, ExternalLink, Mic, PhoneOff, Send, Sparkles } from "lucide-react
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import type { CallConfig, CallState } from "@higgs/call/CallController";
 import type { Audience } from "@higgs/call/script";
-import { AvatarViewer } from "@higgs/avatar/AvatarViewer";
 import { Badge, Button, Select } from "@/components/ui-kit";
 import { fillPlaceholders, interviewerName, useAlexaSettings } from "@/lib/alexa-settings";
 import type { DiligenceProject, Interview, InterviewQuestion, TranscriptTurn } from "@/lib/types";
@@ -15,8 +14,9 @@ import type { DiligenceProject, Interview, InterviewQuestion, TranscriptTurn } f
  * "sends the interview" — the call's config goes to the backend
  * (POST /api/interviews) and the interviewee's link opens in a new tab — and
  * then watches it live over Server-Sent Events: transcript, the question list
- * as Claude changes it, the avatar's video (muted: this tab plays no sound),
- * and the duration. The consultant can end the call from here.
+ * as Claude changes it, and the duration. The avatar is shown only to the
+ * interviewee; this tab has neither its video nor its sound. The consultant
+ * can end the call from here.
  */
 
 type SetIv = (id: string, fn: (iv: Interview) => Interview) => void;
@@ -114,9 +114,6 @@ export function useLiveCall(project: DiligenceProject, iv: Interview, setIv: Set
   const [audience, setAudience] = useState<Audience>(planned ?? "expert");
   const [snap, setSnap] = useState<InterviewSnapshot | null>(null);
   const [error, setError] = useState("");
-  const mediaRef = useRef<HTMLDivElement | null>(null);
-  const viewer = useRef<AvatarViewer | null>(null);
-  const viewerRoom = useRef("");
   const latest = useRef<CallState | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ivId = iv.id;
@@ -144,37 +141,13 @@ export function useLiveCall(project: DiligenceProject, iv: Interview, setIv: Set
       // but at once when the call ends.
       if (st.phase === "ended") flush();
       else if (!timer.current) timer.current = setTimeout(flush, 250);
-
-      // The avatar's video, watch-only and muted.
-      const room = st.avatar.room;
-      if (room && room !== viewerRoom.current && mediaRef.current) {
-        viewerRoom.current = room;
-        const old = viewer.current;
-        viewer.current = null;
-        void old?.close();
-        AvatarViewer.watch(sessionId, room, mediaRef.current)
-          .then((v) => {
-            viewer.current = v;
-          })
-          .catch((e) => setError(`Avatar video: ${e instanceof Error ? e.message : String(e)}`));
-      }
-      if (!room && viewer.current) {
-        void viewer.current.close();
-        viewer.current = null;
-        viewerRoom.current = "";
-      }
     };
     es.onerror = () => {
       if (es.readyState === EventSource.CLOSED) {
         setError("Lost the interview session (the server may have restarted). Send the interview again.");
       }
     };
-    return () => {
-      es.close();
-      void viewer.current?.close();
-      viewer.current = null;
-      viewerRoom.current = "";
-    };
+    return () => es.close();
   }, [sessionId, flush]);
 
   /**
@@ -245,7 +218,6 @@ export function useLiveCall(project: DiligenceProject, iv: Interview, setIv: Set
     error,
     audience,
     setAudience,
-    mediaRef,
     ready: hydrated,
     name,
   };
@@ -331,32 +303,25 @@ export function LiveCallBar({ call }: { call: LiveCall }) {
         </p>
       )}
       {(call.error || st?.error) && <p className="text-sm text-destructive">{call.error || st?.error}</p>}
-      {st?.avatar.status === "error" && (
-        <p className="text-xs text-warning">Avatar unavailable: {st.avatar.detail}</p>
-      )}
     </div>
   );
 }
 
-/** Where the avatar's video goes (the element itself is added by the avatar code). */
+/** The avatar on the interviewee's page (the video element itself is added by AvatarLink). */
 export function AvatarView({
   mediaRef,
   state,
   name,
-  muted = true,
 }: {
   mediaRef: RefObject<HTMLDivElement | null>;
   state: CallState | null;
   name: string;
-  /** The consultant's view never plays sound. */
-  muted?: boolean;
 }) {
   const a = state?.avatar;
   return (
     <div>
       <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
         {name}
-        {muted ? " · video only" : ""}
       </p>
       <div className="relative mx-auto aspect-[3/4] w-full max-w-[220px] overflow-hidden rounded-md border bg-muted">
         {/* The avatar code appends its <video>/<audio> here. React renders nothing inside

@@ -42,7 +42,7 @@ falls back to local playback.
 (`server/interviews.ts`) and opens the interviewee's page (`/interview/<id>`) in a new tab.
 The interviewee presses **Start interview**: that tab runs the call (microphone, Higgs
 Realtime, avatar with sound) and publishes its state; the consultant's tab watches live over
-Server-Sent Events (transcript, Claude's question changes, muted avatar video, duration) and
+Server-Sent Events (transcript, Claude's question changes, duration; no avatar) and
 can end the call. Sessions are kept in memory.
 
 ## The parts

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "A progressive tutorial for the Higgs Audio Realtime API — from a token endpoint to a browser voice assistant",
+  "description": "A progressive tutorial for the Higgs Audio Realtime API \u2014 from a token endpoint to a browser voice assistant",
   "scripts": {
     "dev": "concurrently -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
     "dev:client": "vite",
@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
-    "probe": "tsx tools/probe.ts"
+    "probe": "tsx tools/probe.ts",
+    "check:openai": "tsx tools/check-openai.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

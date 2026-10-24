@@ -110,6 +110,32 @@ export interface FindingReview {
   note?: string | undefined;
 }
 
+/** GPT-6's validation of the investment thesis against completed interviews. */
+export interface ThesisValidationResult {
+  at: string;
+  model: string;
+  /** What it was computed from (thesis, hypotheses, completed transcripts); a change re-runs it. */
+  inputKey: string;
+  interviewCount: number;
+  overall: { verdict: string; summary: string };
+  hypotheses: Array<{
+    id: string;
+    assessment: "Supported" | "Contradicted" | "Mixed Evidence" | "Insufficient Evidence";
+    confidence: "high" | "medium" | "low";
+    rationale: string;
+    evidence: Array<{ interviewId: string; quote: string; stance: "support" | "contradict" | "neutral" }>;
+  }>;
+  /** What the research has not established yet, with a next step for each. */
+  gaps: Array<{
+    hypothesisId: string | null;
+    gap: string;
+    nextStep: string;
+    priority: "high" | "medium" | "low";
+  }>;
+  /** Quotes GPT returned that were not in the transcripts, so were left out. */
+  droppedQuotes: number;
+}
+
 export interface DiligenceProject {
   id: string;
   company: string;
@@ -124,5 +150,6 @@ export interface DiligenceProject {
   selectedExpertIds?: string[];
   /** Completed earlier research rounds; `plan` and `interviews` hold the current round. */
   pastRounds?: ResearchRound[];
+  thesisValidation?: ThesisValidationResult;
   updatedAt: string;
 }

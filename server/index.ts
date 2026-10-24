@@ -3,6 +3,7 @@ import express from "express";
 import dotenv from "dotenv";
 import { HttpError, loadLiveKitConfig, startAvatar, stopAvatar } from "./avatar";
 import { registerInterviewRoutes } from "./interviews";
+import { registerValidationRoute } from "./validation";
 
 dotenv.config();
 
@@ -43,6 +44,7 @@ const BOSON_API_KEY = loadApiKey();
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 registerInterviewRoutes(app);
+registerValidationRoute(app);
 
 // --- Question list: Claude Haiku 5.5 decides what to add and remove ---------
 

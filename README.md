@@ -45,6 +45,12 @@ Realtime, avatar with sound) and publishes its state; the consultant's tab watch
 Server-Sent Events (transcript, Claude's question changes, duration; no avatar) and
 can end the call. Sessions are kept in memory.
 
+**Findings** (dashboard): the investment thesis validation and the research gaps are written
+by OpenAI GPT-6 (`POST /api/thesis-validation`, `server/validation.ts`) from the project's
+thesis and hypotheses and the transcripts of completed interviews, in one call. Quotes are
+checked against the transcripts. Needs `OPENAI_API_KEY` in `.env` (`OPENAI_MODEL` optional);
+`npm run check:openai` confirms the key and the model.
+
 ## The parts
 
 | Part | What you build | Checkpoint |

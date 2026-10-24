@@ -257,6 +257,77 @@ input {
   font-size: 0.8rem;
 }
 
+/* --- live question list --- */
+
+.qlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.qrow {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  font-size: 0.9rem;
+}
+
+.qmark {
+  width: 1rem;
+  flex: none;
+  text-align: center;
+}
+
+.qtag {
+  margin-left: auto;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.q-said {
+  color: var(--muted);
+}
+
+.q-next {
+  border-color: var(--accent);
+}
+
+.q-added .qtag {
+  color: var(--ok);
+}
+
+.q-added {
+  animation: q-flash 1.5s ease-out;
+}
+
+@keyframes q-flash {
+  from {
+    background: color-mix(in srgb, var(--ok) 35%, var(--panel));
+  }
+}
+
+.q-removed {
+  color: var(--error);
+  opacity: 0.75;
+}
+
+.q-removed .qtext {
+  text-decoration: line-through;
+}
+
+.qlist-updating {
+  color: var(--warn);
+  font-weight: normal;
+  font-size: 0.85rem;
+}
+
 /* --- labelled text box --- */
 
 .field {

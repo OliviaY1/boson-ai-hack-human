@@ -18,6 +18,7 @@ import { SessionPanel } from "./ui/SessionPanel";
 import { VoiceEventsPanel } from "./ui/VoiceEventsPanel";
 import { SpeechTimeline } from "./ui/SpeechTimeline";
 import { LlmPanel, type LlmCall } from "./ui/LlmPanel";
+import { QuestionList, type RemovedQuestion } from "./ui/QuestionList";
 import { StatusBar } from "./ui/StatusBar";
 
 /**
@@ -144,6 +145,10 @@ export default function App() {
   const [askedCount, setAskedCount] = useState(0);
   const greetingAnsweredRef = useRef(false);
   const closingSentRef = useRef(false);
+  // Claude's edits, for the live list: when each question was added, and
+  // what was removed.
+  const [addedAt, setAddedAt] = useState<Record<string, number>>({});
+  const [removedQs, setRemovedQs] = useState<RemovedQuestion[]>([]);
   const [goal, setGoal] = useState(DEFAULT_GOAL);
   const goalRef = useRef(goal);
   goalRef.current = goal;
@@ -181,7 +186,13 @@ export default function App() {
     const now = splitQuestions(questionsRef.current);
     const drop = new Set(remove.map((q) => q.trim().toLowerCase()));
     const kept = now.filter((q) => isAsked(q) || !drop.has(q.toLowerCase()));
-    const updated = [...kept, ...add.map((q) => q.trim())].join("\n");
+    const gone = now.filter((q) => !kept.includes(q));
+    const fresh = add.map((q) => q.trim()).filter((q) => q && !kept.some((k) => k.toLowerCase() === q.toLowerCase()));
+    const updated = [...kept, ...fresh].join("\n");
+    const stamp = Date.now();
+    if (gone.length) setRemovedQs((r) => [...r, ...gone.map((text) => ({ text, at: stamp }))]);
+    if (fresh.length)
+      setAddedAt((a) => ({ ...a, ...Object.fromEntries(fresh.map((q) => [q.toLowerCase(), stamp])) }));
     questionsRef.current = updated;
     setQuestions(updated);
     setClaudeStatus(`last update ${new Date().toLocaleTimeString(undefined, { hour12: false })}: +${add.length} −${remove.length}`);
@@ -250,6 +261,8 @@ export default function App() {
     setCloseMessage(null);
     askedRef.current = new Set();
     setAskedCount(0);
+    setAddedAt({});
+    setRemovedQs([]);
     greetingAnsweredRef.current = false;
     closingSentRef.current = false;
     await clientRef.current!.connect();
@@ -300,6 +313,14 @@ export default function App() {
         </span>
         <textarea value={questions} onChange={(e) => setQuestions(e.target.value)} rows={4} />
       </label>
+
+      <QuestionList
+        questions={splitQuestions(questions)}
+        isSaid={isAsked}
+        addedAt={addedAt}
+        removed={removedQs}
+        updating={claudeStatus === "updating…"}
+      />
 
       <label className="field">
         <span>Interview goal — sent to Claude as context</span>

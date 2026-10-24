@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { AlertTriangle, ArrowRight, Compass, FileText, Loader2, RefreshCw } from "lucide-react";
 import { expertOf } from "@/components/research";
 import { AssessmentBadge } from "@/components/status";
@@ -81,11 +82,9 @@ function FindingsPage() {
         )}
       </div>
 
-      <ThesisValidationSection project={project} update={update} />
+      <LlmFindings project={project} update={update} />
 
-      <ResearchGapsSection project={project} fallback={r.gaps} />
-
-      {canRecommendNextRound(project) && (
+      {canRecommendNextRound(project) && project.thesisValidation && (
         <NextRoundCard
           project={project}
           onCreate={() => {
@@ -165,7 +164,11 @@ function NextRoundCard({ project, onCreate }: { project: DiligenceProject; onCre
  * the transcripts of completed interviews (lib/thesis-validation.ts). Quotes are
  * verbatim from the transcripts; the backend drops any that are not.
  */
-function ThesisValidationSection({
+/**
+ * Thesis validation and research gaps, both from one GPT-6 call. Nothing
+ * pre-generated is shown: while GPT-6 works there is only a loading bar.
+ */
+function LlmFindings({
   project,
   update,
 }: {
@@ -173,6 +176,24 @@ function ThesisValidationSection({
   update: (fn: (p: DiligenceProject) => DiligenceProject) => void;
 }) {
   const v = useThesisValidation(project, update);
+  const working = v.loading || (v.hasEvidence && v.stale && !v.error);
+  return (
+    <>
+      <ThesisValidationSection project={project} v={v} working={working} />
+      {!working && v.result && <ResearchGapsSection project={project} result={v.result} />}
+    </>
+  );
+}
+
+function ThesisValidationSection({
+  project,
+  v,
+  working,
+}: {
+  project: DiligenceProject;
+  v: ReturnType<typeof useThesisValidation>;
+  working: boolean;
+}) {
   const hyps = allHypotheses(project);
   const ivs = allInterviews(project);
   const who = (interviewId: string) => {
@@ -191,7 +212,7 @@ function ThesisValidationSection({
             : "GPT-6 tests each hypothesis against the transcripts of completed interviews."
         }
         action={
-          <Button variant="secondary" size="sm" disabled={v.loading || !v.hasEvidence} onClick={() => void v.run()}>
+          <Button variant="secondary" size="sm" disabled={working || !v.hasEvidence} onClick={() => void v.run()}>
             {v.loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
             {v.loading ? "Analysing…" : r ? "Re-run" : "Run"}
           </Button>
@@ -209,13 +230,9 @@ function ThesisValidationSection({
           No completed interview with a transcript yet. Finish an interview to validate the thesis.
         </Card>
       )}
-      {v.hasEvidence && !r && v.loading && (
-        <Card className="flex items-center gap-2 p-5 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> GPT-6 is reading the transcripts…
-        </Card>
-      )}
-      {r && (
-        <div className={cn("space-y-4", v.loading && "opacity-60")}>
+      {working && <ThinkingBar project={project} />}
+      {r && !working && (
+        <div className="space-y-4">
           <Card className="overflow-hidden">
             <table className="w-full text-sm">
               <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">
@@ -279,13 +296,14 @@ function ThesisValidationSection({
   );
 }
 
-/**
- * Research gaps: what the completed interviews have not established yet, with
- * a next step each. Written by GPT-6 in the same pass as the thesis validation
- * (so the two never disagree); before that has run, the old rule-based list.
- */
-function ResearchGapsSection({ project, fallback }: { project: DiligenceProject; fallback: string[] }) {
-  const v = project.thesisValidation;
+/** Research gaps from the same GPT-6 call as the validation (so the two never disagree). */
+function ResearchGapsSection({
+  project,
+  result,
+}: {
+  project: DiligenceProject;
+  result: NonNullable<DiligenceProject["thesisValidation"]>;
+}) {
   const hyps = allHypotheses(project);
   const label = (id: string | null) => {
     if (!id) return "Overall thesis";
@@ -299,44 +317,65 @@ function ResearchGapsSection({ project, fallback }: { project: DiligenceProject;
         description="What the completed interviews have not established yet, and what to do next."
       />
       <Card className="divide-y text-sm">
-        {v ? (
-          v.gaps.length ? (
-            v.gaps.map((g, i) => (
-              <div key={i} className="flex gap-3 px-4 py-3">
-                <AlertTriangle
-                  className={cn(
-                    "mt-0.5 size-4 shrink-0",
-                    g.priority === "high" ? "text-destructive" : g.priority === "medium" ? "text-warning" : "text-muted-foreground",
-                  )}
-                />
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    {label(g.hypothesisId)} · {g.priority} priority
+        {result.gaps.length ? (
+          result.gaps.map((g, i) => (
+            <div key={i} className="flex gap-3 px-4 py-3">
+              <AlertTriangle
+                className={cn(
+                  "mt-0.5 size-4 shrink-0",
+                  g.priority === "high"
+                    ? "text-destructive"
+                    : g.priority === "medium"
+                      ? "text-warning"
+                      : "text-muted-foreground",
+                )}
+              />
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  {label(g.hypothesisId)} · {g.priority} priority
+                </p>
+                <p>{g.gap}</p>
+                {g.nextStep && (
+                  <p className="text-muted-foreground">
+                    <span className="font-medium text-foreground">Next step: </span>
+                    {g.nextStep}
                   </p>
-                  <p>{g.gap}</p>
-                  {g.nextStep && (
-                    <p className="text-muted-foreground">
-                      <span className="font-medium text-foreground">Next step: </span>
-                      {g.nextStep}
-                    </p>
-                  )}
-                </div>
+                )}
               </div>
-            ))
-          ) : (
-            <p className="px-4 py-3 text-muted-foreground">No open gaps.</p>
-          )
-        ) : fallback.length ? (
-          fallback.map((g, i) => (
-            <p key={i} className="flex gap-2 px-4 py-3">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />
-              {g}
-            </p>
+            </div>
           ))
         ) : (
           <p className="px-4 py-3 text-muted-foreground">No open gaps.</p>
         )}
       </Card>
     </section>
+  );
+}
+
+/** An indeterminate progress bar with the elapsed time, while GPT-6 works. */
+function ThinkingBar({ project }: { project: DiligenceProject }) {
+  const [t0] = useState(Date.now());
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, []);
+  const n = allInterviews(project).filter((i) => i.status === "Completed" && i.transcript.length > 0).length;
+  return (
+    <Card className="space-y-3 p-5">
+      <div className="flex items-center justify-between text-sm">
+        <span className="flex items-center gap-2">
+          <Loader2 className="size-4 animate-spin text-primary" />
+          GPT-6 is reading {n} completed interview{n === 1 ? "" : "s"} against the thesis…
+        </span>
+        <span className="tabular-nums text-muted-foreground">{Math.floor((now - t0) / 1000)}s</span>
+      </div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div className="animate-indeterminate h-full w-1/3 rounded-full bg-primary" />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Thesis validation and research gaps appear here when it is done.
+      </p>
+    </Card>
   );
 }

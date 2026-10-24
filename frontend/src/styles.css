@@ -92,6 +92,19 @@
   }
 }
 
+/* Findings: indeterminate loading bar while GPT-6 works. */
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+@utility animate-indeterminate {
+  animation: indeterminate 1.4s ease-in-out infinite;
+}
+
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: none; }

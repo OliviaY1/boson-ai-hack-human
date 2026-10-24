@@ -155,6 +155,55 @@ export function responseCreate(): ClientEvent {
 }
 
 /**
+ * SCRIPT CONTROL — make the model say a given line, as an ordinary turn.
+ *
+ * Every way the API offers to influence what the model says was considered:
+ *
+ *  - `session.update` → `instructions`: the system prompt. It applies to every
+ *    turn, so the line would leak into the rest of the conversation.
+ *  - `conversation.item.create` with an assistant `text` item: writes the line
+ *    into history only. Creating an item never produces audio, and a
+ *    response.create afterwards makes the model continue *after* it.
+ *  - `response.create` → `response.input`: appends a user message, so the
+ *    history would claim the user asked for the line.
+ *  - `response.create` → `response.instructions`: a system prompt for this one
+ *    response only. Nothing extra lands in the history; what remains is the
+ *    assistant item the model actually spoke.
+ *
+ * The last one is what this uses. The result is a normal response: same
+ * output_item.added, same audio deltas, same transcript events — so playback,
+ * the transcript, and barge-in (flush + conversation.item.truncate) all apply
+ * to it unchanged. It is also how the tutorial's own LiveKit agent speaks first
+ * (`generate_reply(instructions=…)` in livekit/agent.py).
+ *
+ * `metadata` is echoed back on `response.created`, which makes the scripted
+ * turn easy to pick out in the debug drawer and in probe captures.
+ */
+export const SCRIPT_METADATA = { source: "script" } as const;
+
+export function scriptInstructions(script: string): string {
+  return [
+    "Your next turn is scripted. Say the script below aloud, word for word, exactly",
+    "as written, as your own words. Do not answer it, explain it, or comment on it,",
+    "and add nothing before or after it: no greeting, no filler, no follow-up.",
+    "Do not call any tools. When you have said it, stop and let the user reply.",
+    "",
+    "SCRIPT:",
+    script,
+  ].join("\n");
+}
+
+export function scriptResponse(script: string): ClientEvent {
+  return {
+    type: "response.create",
+    response: {
+      instructions: scriptInstructions(script),
+      metadata: { ...SCRIPT_METADATA },
+    },
+  };
+}
+
+/**
  * Stream one chunk of microphone audio: base64-encoded PCM16 at the session's
  * input rate. We send roughly one of these every 100 ms.
  *

@@ -42,7 +42,8 @@ h1 {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
   padding: 0.55rem 1rem;
   border-radius: 0.5rem;
@@ -68,6 +69,24 @@ input:disabled {
 input {
   flex: 1;
   min-width: 0;
+}
+
+/* --- script box --- */
+
+.script {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1.2rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.script textarea {
+  width: 100%;
+  font-size: 1rem;
+  resize: vertical;
+  line-height: 1.5;
 }
 
 code {

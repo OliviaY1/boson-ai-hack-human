@@ -24,6 +24,12 @@
  *   npm run probe -- --say "a" --say "b"           several spoken turns in order
  *   npm run probe -- --audio recording.wav         stream a WAV file you already have
  *   npm run probe -- --say "hi" --out captures/x.json
+ *   npm run probe -- --script "What's your name?" --say "I'm Sam"
+ *                                                  SCRIPT CONTROL: have the model say a
+ *                                                  line (the browser's Script box), then
+ *                                                  answer it by voice
+ *   npm run probe -- --script "<long line>" --barge "wait, stop"
+ *                                                  talk over the scripted line
  *
  * `--say` uses the text-to-speech API to synthesise the utterance, then feeds it
  * to the Realtime session the same way the browser feeds microphone audio:
@@ -39,6 +45,7 @@ import {
   functionCallOutput,
   inputAudioAppend,
   responseCreate,
+  scriptResponse,
   userTextItem,
 } from "../src/realtime/events";
 import { dispatch as dispatchTool } from "../src/tools/registry";
@@ -63,6 +70,7 @@ const TRAILING_SILENCE_MS = 900;
  */
 type Turn =
   | { kind: "text"; value: string }
+  | { kind: "script"; value: string }
   | { kind: "say"; value: string }
   | { kind: "barge"; value: string }
   | { kind: "audio"; value: string };
@@ -73,6 +81,7 @@ function parseArgs(argv: string[]): { turns: Turn[]; out: string | null } {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--text") turns.push({ kind: "text", value: argv[++i] });
+    else if (a === "--script") turns.push({ kind: "script", value: argv[++i] });
     else if (a === "--say") turns.push({ kind: "say", value: argv[++i] });
     else if (a === "--barge") turns.push({ kind: "barge", value: argv[++i] });
     else if (a === "--audio") turns.push({ kind: "audio", value: argv[++i] });
@@ -206,6 +215,13 @@ function summarize(evt: Record<string, unknown>): string {
   if (typeof evt.delta === "string") return `${type}  ${JSON.stringify(evt.delta)}`;
   if (typeof evt.transcript === "string") return `${type}  ${JSON.stringify(evt.transcript)}`;
   if (type === "error") return `${type}  ${JSON.stringify(evt.error ?? evt)}`;
+  // Which turn is the scripted one, and how each turn ended (completed vs
+  // cancelled by a barge-in).
+  if (type === "response.created" || type === "response.done") {
+    const r = (evt.response ?? {}) as { id?: string; status?: string; metadata?: unknown };
+    const meta = r.metadata ? `  metadata=${JSON.stringify(r.metadata)}` : "";
+    return `${type}  ${r.id ?? ""} ${r.status ?? ""}${meta}`;
+  }
   return type;
 }
 
@@ -362,6 +378,10 @@ async function main() {
       send(userTextItem(turn.value));
       // A typed turn has no speech for the VAD to detect, so we ask explicitly.
       send(responseCreate());
+    } else if (turn.kind === "script") {
+      // Exactly what the browser sends for the Script box.
+      console.log(`\n>>> script: ${JSON.stringify(turn.value)}\n`);
+      send(scriptResponse(turn.value));
     } else {
       const samples =
         turn.kind === "say"

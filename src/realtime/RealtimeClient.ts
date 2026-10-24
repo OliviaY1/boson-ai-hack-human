@@ -4,6 +4,7 @@ import {
   functionCallOutput,
   inputAudioAppend,
   responseCreate,
+  scriptResponse,
   truncateItem,
   userTextItem,
   type ClientEvent,
@@ -45,6 +46,12 @@ export interface RealtimeCallbacks {
   onMicLevel?: (rms: number) => void;
   /** Mints a fresh ephemeral key for each connection. Required. */
   tokenProvider: () => Promise<string>;
+  /**
+   * SCRIPT CONTROL: the line the model should say first in each conversation.
+   * Read at the moment it is sent, so it always reflects the Script box. An
+   * empty string means no script — the session behaves like the plain tutorial.
+   */
+  scriptProvider?: () => string;
 }
 
 let logSeq = 0;
@@ -102,6 +109,16 @@ export class RealtimeClient {
    */
   private connecting = false;
 
+  /**
+   * SCRIPT CONTROL. The script is spoken once per connection, as soon as BOTH
+   * hold: the session is configured (session.created has acknowledged our
+   * session.update, so voice, VAD and transcription are in force) and the
+   * microphone is live (so you can talk over it from its first word).
+   * Whichever happens second sends it; the order does not matter.
+   */
+  private sessionReady = false;
+  private scriptSent = false;
+
   constructor(callbacks: RealtimeCallbacks) {
     this.cb = callbacks;
     this.player = new RingPlayer((speaking) => {
@@ -127,6 +144,7 @@ export class RealtimeClient {
     this.cb.onMicChange?.(true);
     this.setActivity("listening");
     this.info("Microphone started.");
+    this.maybeSpeakScript();
   }
 
   async stopMic(): Promise<void> {
@@ -144,6 +162,8 @@ export class RealtimeClient {
       return;
     }
     this.connecting = true;
+    this.sessionReady = false;
+    this.scriptSent = false;
     this.setState("connecting");
 
     // Must happen inside the user gesture that triggered this call, or the
@@ -179,6 +199,7 @@ export class RealtimeClient {
     ws.onclose = (ev) => {
       this.connecting = false;
       this.ws = null;
+      this.sessionReady = false;
       const info = describeClose(ev.code, ev.reason);
       this.log("info", `close:${ev.code}`, info);
       this.setState("closed");
@@ -238,6 +259,11 @@ export class RealtimeClient {
     this.cb.onServerEvent?.(evt);
 
     switch (evt.type) {
+      case SERVER.sessionCreated:
+        this.sessionReady = true;
+        this.maybeSpeakScript();
+        break;
+
       case SERVER.responseCreated:
         // A new assistant turn. Zero the played-sample counter so the truncate
         // maths below measures into *this* reply, not the whole session.
@@ -294,6 +320,30 @@ export class RealtimeClient {
         // handle. They are already logged. Never throw here.
         break;
     }
+  }
+
+  // --- script control --------------------------------------------------------
+
+  /**
+   * Ask the model to say the script, through the same `response.create` the
+   * rest of the app uses — with per-response `instructions` carrying the text.
+   *
+   * Nothing else changes for this turn. Its audio goes through the same ring
+   * buffer, its transcript through the same reducer, and if you start talking
+   * over it the server's VAD fires speech_started and handleBargeIn() flushes
+   * and truncates it exactly as it would any other reply.
+   */
+  private maybeSpeakScript(): void {
+    if (this.scriptSent || !this.sessionReady || !this.capture.active) return;
+    this.scriptSent = true;
+    const script = this.cb.scriptProvider?.().trim() ?? "";
+    if (!script) {
+      this.info("Script box is empty — waiting for you to speak first.");
+      return;
+    }
+    this.info(`Speaking the script via response.create (${script.length} chars).`);
+    this.send(scriptResponse(script));
+    this.setActivity("thinking");
   }
 
   // --- the tool loop ---------------------------------------------------------

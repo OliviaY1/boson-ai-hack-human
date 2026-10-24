@@ -8,6 +8,28 @@ You need to be comfortable with JavaScript/TypeScript, React, and `fetch`. You d
 need to know anything about audio programming, and you do not need to have used WebSockets
 before — both are explained where they first come up.
 
+## This fork: script control
+
+This copy of the tutorial adds one thing: a **Script** box at the top of the app. Type a
+line, press **Connect**, then **Start microphone** — Higgs says your line first, then the
+conversation carries on as normal, and you can talk over the line to interrupt it.
+
+The line is sent per response, not through the system prompt: once the session is
+acknowledged and the microphone is live, the client sends one `response.create` whose
+`response.instructions` tells the model to say the script verbatim
+(`scriptResponse()` in `src/realtime/events.ts`, sent from `RealtimeClient`). The reply is
+an ordinary response, so playback, the transcript and barge-in handle it unchanged.
+
+```bash
+npm install
+cp .env.example .env    # add BOSON_API_KEY
+npm run dev             # open http://localhost:5173
+
+# headless, against the real API:
+npm run probe -- --script "What's your name?" --say "My name is Olivia."
+npm run probe -- --script "<a long paragraph>" --barge "Sorry, can I stop you there?"
+```
+
 ## The parts
 
 | Part | What you build | Checkpoint |

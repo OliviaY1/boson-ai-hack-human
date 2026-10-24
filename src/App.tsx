@@ -33,12 +33,18 @@ export default function App() {
   const [micActive, setMicActive] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
+  // SCRIPT CONTROL: what Higgs says first. The client reads it through a ref,
+  // at the moment it sends it, so edits are picked up without re-wiring.
+  const [script, setScript] = useState("What's your name?");
+  const scriptRef = useRef(script);
+  scriptRef.current = script;
 
   // The client outlives re-renders, so it lives in a ref rather than state.
   const clientRef = useRef<RealtimeClient | null>(null);
   if (!clientRef.current) {
     clientRef.current = new RealtimeClient({
       tokenProvider: fetchToken,
+      scriptProvider: () => scriptRef.current,
       onConnectionState: setConnection,
       onActivity: setActivity,
       onLog: (entry) => setLog((l) => [...l, entry]),
@@ -92,6 +98,16 @@ export default function App() {
         weather in Willow Creek, say — and it will search for it and speak what
         it found.
       </p>
+
+      <label className="script">
+        <span>Script</span>
+        <textarea
+          value={script}
+          onChange={(e) => setScript(e.target.value)}
+          rows={2}
+          placeholder="What Higgs says first, once you connect and start the microphone…"
+        />
+      </label>
 
       <StatusBar connection={connection} activity={activity} closeMessage={closeMessage} />
 

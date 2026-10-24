@@ -1,10 +1,12 @@
 # Architecture audit
 
-Audit date: **2026-10-24**. Source snapshot: **`9a82ca05d1b15d89209fe0dfd87f0e7d3995c88f`**. Scope covers the dashboard, Express API, shared voice/audio/avatar engine, original debug app, Python alternatives, dependency/build configuration, tests and CI.
+Audit date: **2026-10-24**. Source snapshot: **`f212a7046a2a4b66b4967c57d0528c4016737bf2`**. Scope covers the dashboard, Express API, shared voice/audio/avatar engine, original debug app, Python alternatives, dependency/build configuration, tests and CI.
 
 The prototype has useful component boundaries and working offline test/build baselines. Its main architectural weakness is ownership: project history belongs to one browser, active calls belong to another browser, and the server accepts unversioned snapshots without authenticated roles. Several transitions between those owners can lose evidence, retain obsolete analysis, or outlive the call that created them.
 
 No application fixes were made. Recommendations below are future work, not a description of functionality already present. Source links and line numbers refer to the audited commit. [Verification](verification.md) separates executed checks from static findings and timing-dependent risks.
+
+The latest recheck includes five commits after the original `9a82ca0` audit. Background polling improves closed-sheet completion recovery, generic plans now include every selected contact, backend response errors are clearer, model fallback excludes named non-chat variants, and an optional manual OpenAI smoke workflow was added. None of A01-A18 is fully resolved. A19 records an additional reproduced validation race exposed by changes to evidence during an in-flight request.
 
 ## Priorities
 
@@ -30,6 +32,7 @@ No application fixes were made. Recommendations below are future work, not a des
 | A16 | Medium | Full frontend typecheck fails; CI filters diagnostics and lacks live-boundary tests | Executed checks + CI inspection |
 | A17 | Medium for sustained/team use | Browser persistence can overwrite changes and has no migration/write recovery | Source inspection |
 | A18 | Medium for reproducible deployment | Alternate tracks and runtime CDN dependency need independent compatibility checks | Lock/config inspection |
+| A19 | Medium | A new evidence revision can be marked tried without launching validation | Deferred-response hook reproduction |
 
 ## Access, evidence and state ownership
 
@@ -37,7 +40,7 @@ No application fixes were made. Recommendations below are future work, not a des
 
 The Express entry installs a JSON parser and registers provider/session routes without authentication, authorization, rate limits or per-project quotas. A caller able to reach it can mint ephemeral Boson credentials, start avatars and invoke the configured LLM APIs using server-held keys. Keeping the long-lived keys out of the browser is valuable, but does not authorize these operations. The 2 MB body cap limits request size, not cost or concurrency.
 
-Evidence: [server/index.ts:44](../../server/index.ts#L44), [token minting:163](../../server/index.ts#L163), [avatar start:301](../../server/index.ts#L301), [validation:204](../../server/validation.ts#L204). The API listener does not explicitly restrict its host ([index.ts:346](../../server/index.ts#L346)).
+Evidence: [server/index.ts:44](../../server/index.ts#L44), [token minting:163](../../server/index.ts#L163), [avatar start:301](../../server/index.ts#L301), [validation:204](../../server/validation.ts#L205). The API listener does not explicitly restrict its host ([index.ts:346](../../server/index.ts#L346)).
 
 Follow-up: establish authenticated project ownership and a narrowly scoped participant capability, then apply per-user/project rate, concurrency and spend limits. Keep the controlled local-demo assumption explicit until that exists.
 
@@ -45,7 +48,7 @@ Follow-up: establish authenticated project ownership and a narrowly scoped parti
 
 The same session ID reads the complete config, replaces arbitrary CallState, subscribes to snapshots and requests termination. It is a random capability, but there is no separation between participant and consultant permissions. The participant receives the full interview goal, which includes the thesis; hiding the dashboard UI does not keep that information from the browser.
 
-A credential-free HTTP reproduction confirmed all four operations using only the session ID, including a synthetic state overwrite. Evidence: [server/interviews.ts:64](../../server/interviews.ts#L64), [state writes:70](../../server/interviews.ts#L70), [termination:78](../../server/interviews.ts#L78), [subscription:86](../../server/interviews.ts#L86), [goal construction](../../frontend/src/components/live-call.tsx#L53).
+A credential-free HTTP reproduction confirmed all four operations using only the session ID, including a synthetic state overwrite. Evidence: [server/interviews.ts:64](../../server/interviews.ts#L64), [state writes:70](../../server/interviews.ts#L70), [termination:78](../../server/interviews.ts#L78), [subscription:86](../../server/interviews.ts#L86), [goal construction](../../frontend/src/components/live-call.tsx#L54).
 
 Follow-up: separate owner and participant capabilities; return only the configuration the participant needs. Make the policy for sharing investment assumptions explicit. Bind accepted state to a session owner and a monotonically increasing revision.
 
@@ -55,7 +58,7 @@ Follow-up: separate owner and participant capabilities; return only the configur
 
 This was reproduced with the actual hook, a parent using the same inline-updater pattern, and an EventSource stub that returns an initial ended snapshot. No real SSE service or provider was needed. A child-only `setSnap` rerender is not the cause; the project-store write and parent callback replacement are.
 
-Evidence: [inline updater](../../frontend/src/routes/projects.$projectId.live.tsx#L85), [flush/effect dependencies](../../frontend/src/components/live-call.tsx#L122), [immediate initial snapshot](../../server/interviews.ts#L94).
+Evidence: [inline updater](../../frontend/src/routes/projects.$projectId.live.tsx#L92), [flush/effect dependencies](../../frontend/src/components/live-call.tsx#L123), [immediate initial snapshot](../../server/interviews.ts#L94).
 
 Follow-up: stabilize the updater/subscription ownership and skip unchanged snapshots. Keep session synchronization independent of the detail panel's render lifecycle.
 
@@ -63,7 +66,7 @@ Follow-up: stabilize the updater/subscription ownership and skip unchanged snaps
 
 The cache fingerprint includes thesis length/first 40 characters, hypothesis IDs/titles, transcript turn counts and final-text length. The submitted payload contains substantially more: the full thesis, company, hypothesis descriptions/evidence, participant metadata, question state and full transcript text. Equal-length edits after thesis character 40, or equal-length answer replacements, can preserve the key and suppress automatic reassessment.
 
-Both collisions were reproduced with the exported `validationInputKey`. The Overview thesis editor makes the first trigger a normal user action. Evidence: [fingerprint](../../frontend/src/lib/thesis-validation.ts#L18), [actual payload](../../frontend/src/lib/thesis-validation.ts#L29), [cache gate](../../frontend/src/lib/thesis-validation.ts#L95), [thesis editor](../../frontend/src/routes/projects.$projectId.index.tsx#L100).
+Both collisions were reproduced with the exported `validationInputKey`. The Overview thesis editor makes the first trigger a normal user action. Evidence: [fingerprint](../../frontend/src/lib/thesis-validation.ts#L19), [actual payload](../../frontend/src/lib/thesis-validation.ts#L30), [cache gate](../../frontend/src/lib/thesis-validation.ts#L96), [thesis editor](../../frontend/src/routes/projects.$projectId.index.tsx#L100).
 
 Follow-up: derive a canonical fingerprint from the complete submitted payload. Associate each response with that revision and reject a response that has become obsolete while in flight. Base next-round proposals on the same explicit revision.
 
@@ -71,7 +74,9 @@ Follow-up: derive a canonical fingerprint from the complete submitted payload. A
 
 Next-round eligibility requires only one completed interview. Creating it archives the entire current interview array, including active/invited interviews, then empties `project.interviews`. Dashboard live updates map only that current array. A participant can continue a call while its archived dashboard record stops advancing; the incomplete interview is then omitted from validation.
 
-A local fixture confirmed the active interview survives in `pastRounds` and cannot be changed by the current-only updater. Evidence: [eligibility](../../frontend/src/lib/mock-service.ts#L52), [archive transition](../../frontend/src/lib/next-round.ts#L138), [current-only writes](../../frontend/src/routes/projects.$projectId.live.tsx#L85).
+A local fixture confirmed the active interview survives in `pastRounds` and cannot be changed by the current-only updater. Evidence: [eligibility](../../frontend/src/lib/mock-service.ts#L52), [archive transition](../../frontend/src/lib/next-round.ts#L139), [current-only writes](../../frontend/src/routes/projects.$projectId.live.tsx#L92).
+
+The newer background poller also scans only `project.interviews`, so it does not recover those archived sessions ([useSyncSessions](../../frontend/src/components/live-call.tsx#L360)).
 
 Follow-up: explicitly finish/cancel remaining sessions before archiving, or make interview/session updates work across current and historical rounds. Model “archived” separately from “completed”.
 
@@ -125,7 +130,7 @@ Additional media/control risks are bounded by specific timing conditions:
 
 The quote filter checks normalized interviewee text and drops quotes that fail inclusion. Assessment, confidence, rationale and overall verdict are accepted independently. A stubbed OpenAI response containing only one fabricated quote returned `droppedQuotes:1` and empty evidence while retaining `Supported`, `high`, and overall `Supported`.
 
-Evidence: [quote filter and assessment construction](../../server/validation.ts#L236), [overall verdict](../../server/validation.ts#L266).
+Evidence: [quote filter and assessment construction](../../server/validation.ts#L237), [overall verdict](../../server/validation.ts#L267).
 
 Follow-up: flag or downgrade conclusions whose required evidence has been removed and expose the rejection to reviewers. Quote inclusion is useful provenance checking, but does not validate contextual support or the truth/identity of client-submitted transcript content.
 
@@ -135,7 +140,7 @@ The session Map is capped at 200 and removes the oldest entry without checking f
 
 State publication sends full snapshots without a sequence/version. The server accepts whichever request arrives last; a delayed older request can overwrite newer or ended state. The participant ignores POST errors and final publication is only a `keepalive` attempt. Existing watchers are not explicitly closed when their entry is evicted.
 
-Evidence: [Map/eviction](../../server/interviews.ts#L31), [unversioned replacement](../../server/interviews.ts#L70), [participant publishing](../../frontend/src/routes/interview.$sessionId.tsx#L56).
+Evidence: [Map/eviction](../../server/interviews.ts#L31), [unversioned replacement](../../server/interviews.ts#L70), [participant publishing](../../frontend/src/routes/interview.$sessionId.tsx#L57).
 
 Follow-up: define durable session ownership, ordered/idempotent writes, final-state acknowledgement and retention/expiry. Explicitly close expired streams and resolve active sessions before eviction. Design shared state/pub-sub before scaling beyond one process.
 
@@ -143,7 +148,7 @@ Follow-up: define durable session ownership, ordered/idempotent writes, final-st
 
 Findings' empty-state gate checks mock-derived findings or completed interviews in the current round. Real mirrored transcript turns have no `questionId`, while the legacy extractor requires one. For real-only research without surviving legacy/mock findings, starting a new round therefore hides historical validation until a current-round interview completes, even though validation itself reads completed interviews across rounds. Mixed demo/real projects may bypass that gate. The separate printable-report route always uses the mock findings generator and ignores model validation.
 
-The local round fixture confirmed the gate has neither derived findings nor a current completion after archiving real evidence. Evidence: [Findings gate](../../frontend/src/routes/projects.$projectId.findings.tsx#L54), [live transcript projection](../../frontend/src/components/live-call.tsx#L85), [extractor requirement](../../frontend/src/lib/mock-service.ts#L475), [report generator](../../frontend/src/routes/projects.$projectId_.report.tsx#L30).
+The local round fixture confirmed the gate has neither derived findings nor a current completion after archiving real evidence. Evidence: [Findings gate](../../frontend/src/routes/projects.$projectId.findings.tsx#L62), [live transcript projection](../../frontend/src/components/live-call.tsx#L86), [extractor requirement](../../frontend/src/lib/mock-service.ts#L476), [report generator](../../frontend/src/routes/projects.$projectId_.report.tsx#L30).
 
 Follow-up: derive visibility and exports from the same analysis/evidence revision across all rounds. Keep a deliberately labeled demo path separate if it remains useful.
 
@@ -151,7 +156,7 @@ Follow-up: derive visibility and exports from the same analysis/evidence revisio
 
 Disconnecting a demo network or deleting a contact removes its Expert record while interview/plan `expertId` references survive. Historical UI and validation payloads then lose participant name/background. Separately, sending an invitation retains `Not Started` status, which leaves its plan unlocked; reapproval recreates interview IDs and discards the local link to the existing backend session.
 
-Evidence: [network removal](../../frontend/src/routes/projects.$projectId.sources.tsx#L63), [contact deletion](../../frontend/src/routes/projects.$projectId.sources.tsx#L373), [participant lookup](../../frontend/src/lib/thesis-validation.ts#L31), [invitation state](../../frontend/src/components/live-call.tsx#L185), [plan lock/reapproval](../../frontend/src/routes/projects.$projectId.plan.tsx#L66).
+Evidence: [network removal](../../frontend/src/routes/projects.$projectId.sources.tsx#L63), [contact deletion](../../frontend/src/routes/projects.$projectId.sources.tsx#L373), [participant lookup](../../frontend/src/lib/thesis-validation.ts#L32), [invitation state](../../frontend/src/components/live-call.tsx#L186), [plan lock/reapproval](../../frontend/src/routes/projects.$projectId.plan.tsx#L66).
 
 Follow-up: retain immutable participant metadata on each interview, soft-delete referenced contacts, and model invited/session-created state. Make approval idempotent or explicitly cancel/replace invitations when the plan changes.
 
@@ -159,7 +164,7 @@ Follow-up: retain immutable participant metadata on each interview, soft-delete 
 
 The API mostly uses TypeScript assertions plus `Array.isArray`, rather than validating nested request/response schemas. Large/malformed items can reach prompt construction and output mapping. Some next-round prompt construction runs before the handler's `try`, so malformed nested values can reject outside its intended error response. Provider fetches have no application-defined abort/deadline or retry policy. Long waits can retain active startup/analysis operations and amplify concurrent work.
 
-Evidence: [global body parser](../../server/index.ts#L45), [initial-question payload construction](../../server/index.ts#L232), [next-round prompt construction before try](../../server/validation.ts#L337), [provider fetch](../../server/validation.ts#L112), [avatar calls](../../server/avatar.ts#L145).
+Evidence: [global body parser](../../server/index.ts#L45), [initial-question payload construction](../../server/index.ts#L232), [next-round prompt construction before try](../../server/validation.ts#L338), [provider fetch](../../server/validation.ts#L113), [avatar calls](../../server/avatar.ts#L145).
 
 Follow-up: validate bounded nested schemas before prompt building, keep async handlers fully covered by error handling, and introduce explicit deadlines/cancellation. Treat model JSON as untrusted structured output. Delimit transcript/contact content and verify important decisions rather than relying solely on prompt instructions to resist embedded instructions.
 
@@ -183,9 +188,11 @@ Follow-up: select the API hosting/runtime, production same-origin routing, HTTPS
 
 ### A16 — Green unit/build jobs do not establish the full integration contract
 
-All 31 root and 13 dashboard tests passed locally, as did root typecheck and both builds. Full dashboard `tsc` failed with 56 diagnostics before route generation, then 54 after build regenerated the participant route. CI explicitly ignores the full exit status and filters diagnostics to selected paths. Thus shared audio/realtime/state typing errors can coexist with a green filtered job. The generated route tree itself is stale at the audited commit and gains the participant route during build.
+All 31 root and 13 dashboard tests passed again on the latest snapshot, as did root typecheck and both builds. Full dashboard `tsc` still fails with 54 shared-code diagnostics after build regenerates the participant route. The original audit also observed 56 diagnostics before route generation, including two stale-route diagnostics. CI explicitly ignores the full exit status and filters diagnostics to selected paths. Thus shared audio/realtime/state typing errors can coexist with a green filtered job. The generated route tree remains stale in source and gains the participant route during build.
 
 The unit tests mainly exercise audio conversion, transcript replay, local/mock helpers and route matching. They do not cover the actual session/SSE, call cleanup, active-round transitions, real Findings cache lifecycle, avatar write failures, or Python workers. The new audit reproductions exposed gaps without contacting providers.
+
+There is now a separate manually dispatched [OpenAI workflow](../../.github/workflows/openai-check.yml). It checks credentials/model access, starts Express, and calls `/api/initial-questions` with a fixed fixture. It is not a push/PR gate and does not exercise the browser, Boson, avatar or session relay. This audit checked its LF-based thesis extraction without dispatching it or contacting OpenAI. The fixture supplies three abbreviated hypotheses rather than the thesis's full seven pillars, and success is principally an HTTP/nonempty-question check rather than a research-quality assertion.
 
 Evidence: [CI diagnostic filter](../../.github/workflows/ci.yml#L46), [root tests](../../test), [dashboard tests](../../frontend/src/test), [strict dashboard config](../../frontend/tsconfig.json), [generated route tree](../../frontend/src/routeTree.gen.ts).
 
@@ -199,6 +206,16 @@ Evidence: [Pipecat fork](../../pipecat/pyproject.toml#L15), [LiveKit fork](../..
 
 Follow-up: run a compatibility/build gate for each supported track, package shared resources deliberately, pin/document the package-manager workflow, and decide whether the browser SDK should be bundled. Preserve the existing Rolldown override until its compatibility is explicitly verified.
 
+### A19 — New evidence can leave validation stale without a follow-up request
+
+When evidence changes during an in-flight request, `useThesisValidation` records the new key as tried and invokes `run`. That call exits because `running.current` is already true. The older request then saves its result, but the new key has been marked tried, so the effect never launches the required follow-up. Findings treats stale data as working and disables Re-run, leaving the progress state stuck until a remount or another key change.
+
+This was reproduced with the real hook, a deferred first response, and a second interview changing to completed before that response resolved. The final hook state had the old cached key, `stale:true`, `loading:false`, and only one fetch. The new background Findings poller makes this a normal completion scenario rather than requiring a manual edit during validation.
+
+Evidence: [running guard](../../frontend/src/lib/thesis-validation.ts#L102), [result write](../../frontend/src/lib/thesis-validation.ts#L108), [tried-key gate](../../frontend/src/lib/thesis-validation.ts#L119), [Findings polling](../../frontend/src/routes/projects.$projectId.findings.tsx#L54), [working state](../../frontend/src/routes/projects.$projectId.findings.tsx#L258), [disabled rerun](../../frontend/src/routes/projects.$projectId.findings.tsx#L295).
+
+Follow-up: queue the newest pending input revision and run it when the current request finishes. Mark a revision as attempted only when its request actually starts, reject stale responses, and distinguish waiting/queued work from an active request in the UI.
+
 ## Other bounded observations
 
 - Root and Python probes are diagnostics, not strong acceptance gates: typed replies/tool semantics are not asserted, and root reply waits can time out without failing the process ([root probe](../../tools/probe.ts#L354), [Pipecat probe](../../pipecat/probe.py#L64), [LiveKit probe](../../livekit/probe.py#L66)).
@@ -208,7 +225,7 @@ Follow-up: run a compatibility/build gate for each supported track, package shar
 
 ## Suggested follow-up order
 
-1. Resolve live synchronization and evidence correctness: A03-A05, A10, A12-A13.
+1. Resolve live synchronization and evidence correctness: A03-A05, A10, A12-A13, A19.
 2. Centralize voice lifecycle ownership and version question orchestration: A06-A09.
 3. Before untrusted/shared deployment, implement A01-A02 plus durable ordered sessions and production wiring: A11, A14-A15, A17.
 4. Make the full integration contract observable and testable: A16, A18, focused media/probe follow-up.

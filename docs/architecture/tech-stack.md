@@ -1,6 +1,6 @@
 # Technology stack and implementation inventory
 
-Snapshot: `9a82ca05d1b15d89209fe0dfd87f0e7d3995c88f`, 2026-10-24. See [audit findings](audit.md) for consequences of the boundaries described here.
+Snapshot: `f212a7046a2a4b66b4967c57d0528c4016737bf2`, 2026-10-24. See [audit findings](audit.md) for consequences of the boundaries described here.
 
 ## Technology map
 
@@ -65,6 +65,7 @@ Lockfile resolutions below describe the committed dependency graph, rather than 
 | Avatar browser SDK | `livekit-client@2.15.0`, loaded at runtime from unpkg | Avatar room, byte streams and media tracks; [AvatarLink](../../src/avatar/AvatarLink.ts#L18). This dependency is outside both package locks. |
 | Root tests | Vitest 2.1.9 | Resampling/PCM, transcript reducer, bundled tool behavior; [tests](../../test) |
 | Dashboard tests | Vitest 4.1.11, Testing Library, jsdom | Local helpers/simulation, round selection, route matching; [test configuration](../../frontend/vitest.config.ts), [tests](../../frontend/src/test) |
+| Manual provider smoke workflow | GitHub Actions on Ubuntu / Node 22; repository `OPENAI_API_KEY` secret and optional `OPENAI_MODEL` variable | Manually exercises OpenAI and the initial-question endpoint; [workflow](../../.github/workflows/openai-check.yml). Not part of routine push/PR CI. |
 | Pipecat alternative | Python `>=3.11,<3.14`; `pipecat-ai` 1.12.0; Boson plugin from a pinned Git fork | Separate worker/playground tutorial; [manifest](../../pipecat/pyproject.toml), [uv lock](../../pipecat/uv.lock) |
 | LiveKit Agents alternative | Python `>=3.11,<3.14`; agents and OpenAI/Boson plugins report 1.8.2 at a pinned fork commit | Separate worker plus external playground; [manifest](../../livekit/pyproject.toml), [uv lock](../../livekit/uv.lock) |
 
@@ -85,22 +86,25 @@ React Query is provided at the dashboard root, but the research operations inspe
 
 The API uses HTTP requests rather than Anthropic/OpenAI SDKs. LiveKit server tokens are HS256 JWTs signed with `node:crypto`; room creation calls LiveKit's Twirp HTTP endpoint directly ([server/avatar.ts](../../server/avatar.ts#L43)).
 
+Automatic OpenAI fallback discovery excludes model IDs containing `audio`, `realtime`, `tts`, `transcribe`, `image` or `search`. This is a name heuristic; an explicit `OPENAI_MODEL` bypasses it, and compatibility/availability was not checked against a live service. The dashboard's [readBackendJson helper](../../frontend/src/lib/backend.ts) improves empty/non-JSON error messages but does not validate response schemas or establish why a backend reply failed.
+
 ## Implemented versus simulated
 
 | Capability | Current implementation |
 | --- | --- |
 | Projects, contacts, reviews, plans and rounds | Browser state persisted to localStorage; no project CRUD backend |
 | GLG / AlphaSights / Third Bridge connections | Static demo directories and local connection flags; no network integration |
-| Initial hypotheses and expert selection | Local thesis-pillar parsing or templates; generic plan considers up to three selected contacts |
+| Initial hypotheses and expert selection | Local thesis-pillar parsing or templates; generic plan includes all selected contacts |
 | Opening questions | Real OpenAI request, with explicit local template fallback on failure |
 | Voice interviews | Implemented live participant-side Boson connection and optional avatar |
+| Background session recovery | Live/Findings poll unfinished current-round sessions immediately and every four seconds, in addition to detail-panel SSE |
 | Automatic demo interviews | Simulation helpers remain; auto-running store simulation is disabled |
 | Thesis findings and next-round recommendations | Implemented OpenAI requests based on completed transcripts |
 | Printable report | Separate legacy route using local/mock findings; does not consume real model validation |
 | Browser `web_search` tool | Searches the bundled `src/tools/searchIndex.json`; no actual web request |
 | Python search/time tools | Separate worker-local tools; can optionally use Parallel search when configured |
 
-Sources: [sources route](../../frontend/src/routes/projects.$projectId.sources.tsx#L55), [plan builder](../../frontend/src/lib/mock-service.ts#L240), [question fallback](../../frontend/src/lib/initial-questions.ts#L55), [disabled simulation](../../frontend/src/lib/store.tsx#L57), [report](../../frontend/src/routes/projects.$projectId_.report.tsx#L30), [browser search](../../src/tools/handlers.ts#L22), [Python tools](../../pipecat/tools.py).
+Sources: [sources route](../../frontend/src/routes/projects.$projectId.sources.tsx#L55), [plan builder](../../frontend/src/lib/mock-service.ts#L240), [question fallback](../../frontend/src/lib/initial-questions.ts#L56), [disabled simulation](../../frontend/src/lib/store.tsx#L57), [report](../../frontend/src/routes/projects.$projectId_.report.tsx#L30), [browser search](../../src/tools/handlers.ts#L22), [Python tools](../../pipecat/tools.py).
 
 ## HTTP API inventory
 
@@ -117,12 +121,12 @@ All routes below belong to the Express process. Its global JSON parser permits r
 | `POST /api/avatar/start` | Participant/debug app: optional avatar ID | Creates LiveKit room/tokens and Boson avatar session |
 | `POST /api/avatar/stop` | Participant/debug app: avatar session ID | Deletes Boson avatar session |
 | `POST /api/interviews` | Consultant: call config and display metadata | Random 16-hex-character session ID |
-| `GET /api/interviews/:id` | Participant, or any caller with session ID | Config plus latest state/display/end flag |
+| `GET /api/interviews/:id` | Participant loader, consultant background poller, or any caller with session ID | Config plus latest state/display/end flag |
 | `POST /api/interviews/:id/state` | Participant: entire CallState | Replaces session state and broadcasts SSE snapshot |
 | `POST /api/interviews/:id/end` | Consultant, or any caller with session ID | Sets end flag and broadcasts it |
 | `GET /api/interviews/:id/events` | Both browser roles | Initial snapshot, subsequent full snapshots, 15-second heartbeat |
 
-Sources: [server entry](../../server/index.ts#L44), [interview routes](../../server/interviews.ts#L43), [validation route](../../server/validation.ts#L203), [next-round route](../../server/validation.ts#L333).
+Sources: [server entry](../../server/index.ts#L44), [interview routes](../../server/interviews.ts#L43), [validation route](../../server/validation.ts#L204), [next-round route](../../server/validation.ts#L334).
 
 ## State and persistence
 

@@ -1,8 +1,10 @@
 # Diligence Live architecture reference
 
-Audited on **2026-10-24**, against commit [`9a82ca05d1b15d89209fe0dfd87f0e7d3995c88f`](https://github.com/OliviaY1/boson-ai-hack-human/tree/9a82ca05d1b15d89209fe0dfd87f0e7d3995c88f). Commit subject: “GPT-6 context: questions asked / not reached / dropped, hypothesis text”. The audit describes that snapshot; concurrent and later development can change these conclusions.
+Audited and rechecked on **2026-10-24**, against application commit [`f212a7046a2a4b66b4967c57d0528c4016737bf2`](https://github.com/OliviaY1/boson-ai-hack-human/tree/f212a7046a2a4b66b4967c57d0528c4016737bf2). Commit subject: “Add a manual GitHub Actions check of the Research Plan's GPT-6 call”. The audit describes that snapshot; concurrent and later development can change these conclusions.
 
 Diligence Live combines a browser-persisted research dashboard, a shared browser voice engine, and a small Express API for provider access and interview-state relay. The repository also contains the original tutorial/debug app and two independent Python tutorial implementations.
+
+The recheck reviewed the five application commits since the original `9a82ca0` snapshot. They add background session polling, all selected contacts in generic plans, Oakville defaults, clearer backend errors, safer model discovery and a manual OpenAI smoke workflow. All 18 original findings remain open, with some reliability/diagnostic improvements; a further validation-in-flight race is recorded as A19. See [the verification record](verification.md) for rerun results.
 
 ## Read this documentation
 
@@ -33,7 +35,7 @@ The Markdown pages include Mermaid code blocks that GitHub can render. Each diag
 
 Everything added for this audit is under `docs/architecture/`. The existing numbered tutorials remain in `docs/part-*.md`. No application source, package manifest, lockfile, configuration, root README or existing tutorial needs to change to use these references. This directory is outside the checked-in application/test entry points.
 
-The work was prepared in a managed worktree pinned to the audit SHA, protecting the active checkout. No provider credentials were copied into it, and no live model, microphone or avatar sessions were used for the audit.
+The work was prepared and verified in a managed worktree. After the requested fast-forward pull, the documentation commit was integrated into the main checkout. Changes authored for this audit remain confined to this directory. No provider credentials were copied into the verification worktree, and no live model, microphone or avatar sessions were used for the audit.
 
 For an update:
 

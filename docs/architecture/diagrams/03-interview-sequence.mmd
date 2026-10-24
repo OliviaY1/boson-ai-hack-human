@@ -42,12 +42,17 @@ sequenceDiagram
     P->>A: POST /api/interviews/:id/state
     A-->>D: SSE snapshot
     D->>D: Mirror interview into project and localStorage
+    opt Current-session polling
+      D->>A: GET /api/interviews/:id immediately and every 4 seconds
+      A-->>D: Latest state snapshot
+      D->>D: Mirror transcript or ended state, including with sheet closed
+    end
     P->>A: POST /api/questions with transcript and queue
     A->>Q: Request question additions and removals
     Q-->>A: Question revision JSON
     A-->>P: Sanitized question changes
     P->>P: Revise pending rows
-    Note over P,H: response.done installs the next question.<br/>Question revisions run independently.
+    Note over P,Q: response.done installs the next question.<br/>Question revisions run independently.
   end
   alt Consultant ends interview
     C->>D: End call

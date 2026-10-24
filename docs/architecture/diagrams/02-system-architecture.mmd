@@ -3,8 +3,11 @@ flowchart LR
     ui["Dashboard routes<br/>Sources / Plan / Live / Findings"]
     store["StoreProvider<br/>Current and archived rounds"]
     disk["localStorage<br/>diligence-live:v2"]
+    poller["useSyncSessions<br/>Unfinished current sessions<br/>Live / Findings pages"]
     ui <--> store
     store <--> disk
+    ui --> poller
+    poller --> store
   end
   subgraph participant["Participant browser - live call owner"]
     page["Interview link<br/>Start / Leave interview"]
@@ -28,6 +31,8 @@ flowchart LR
   room["LiveKit room<br/>Boson avatar media"]
   ui -->|"Create session / end request"| sessions
   sessions -->|"SSE: full call state"| ui
+  poller -->|"GET current session every 4 seconds"| sessions
+  sessions -->|"JSON snapshot"| poller
   page -->|"Get config / POST state"| sessions
   sessions -->|"SSE: endRequested"| page
   realtime -->|"GET /api/token"| tokens

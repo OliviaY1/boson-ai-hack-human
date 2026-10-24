@@ -5,7 +5,7 @@ flowchart LR
   opening["POST /api/initial-questions<br/>OpenAI writes questions per person"]
   review["Consultant reviews and approves<br/>Plan and question list"]
   interviews["Real participant interviews<br/>Higgs + adaptive Claude questions"]
-  mirror["Session POST + SSE relay<br/>Mirror into local Interview records"]
+  mirror["Session POST + SSE / polling<br/>Mirror into local Interview records"]
   completed["All completed nonempty transcripts<br/>Current and past research rounds"]
   validation["POST /api/thesis-validation<br/>OpenAI assesses thesis and gaps"]
   filter["Server quote filter<br/>Normalized substring check per interview"]

@@ -26,7 +26,7 @@ flowchart LR
   fullconfig --> runtime
   pcm <--> higgs
   runtime -->|"POST state"| state
-  state -->|"SSE mirror"| records
+  state -->|"SSE or current-session poll mirror"| records
   thesis --> openai
   contacts --> openai
   records --> openai

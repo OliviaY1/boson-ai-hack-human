@@ -1,6 +1,6 @@
 # Data flows
 
-Snapshot: `9a82ca05d1b15d89209fe0dfd87f0e7d3995c88f`, 2026-10-24. Diagrams describe the normal implemented path; failure and race conditions are documented in [the audit](audit.md).
+Snapshot: `f212a7046a2a4b66b4967c57d0528c4016737bf2`, 2026-10-24. Diagrams describe the normal implemented path; failure and race conditions are documented in [the audit](audit.md).
 
 ## Interview invitation, live monitoring and completion
 
@@ -51,12 +51,17 @@ sequenceDiagram
     P->>A: POST /api/interviews/:id/state
     A-->>D: SSE snapshot
     D->>D: Mirror interview into project and localStorage
+    opt Current-session polling
+      D->>A: GET /api/interviews/:id immediately and every 4 seconds
+      A-->>D: Latest state snapshot
+      D->>D: Mirror transcript or ended state, including with sheet closed
+    end
     P->>A: POST /api/questions with transcript and queue
     A->>Q: Request question additions and removals
     Q-->>A: Question revision JSON
     A-->>P: Sanitized question changes
     P->>P: Revise pending rows
-    Note over P,H: response.done installs the next question.<br/>Question revisions run independently.
+    Note over P,Q: response.done installs the next question.<br/>Question revisions run independently.
   end
   alt Consultant ends interview
     C->>D: End call
@@ -79,7 +84,9 @@ The consultant creates the backend session before the participant starts. The pa
 
 The participant batches state publication at roughly one request per 250 ms and attempts an immediate `keepalive` POST when ended. These are complete snapshots, not transcript deltas. The server broadcasts them to its subscribers, and the consultant mirrors them into the browser project store. The server heartbeat is every 15 seconds. A delivery attempt is not an acknowledgement of durable completion; there is no revision number, event log or server-persisted final transcript.
 
-Sources: [consultant hook](../../frontend/src/components/live-call.tsx#L109), [participant publisher](../../frontend/src/routes/interview.$sessionId.tsx#L56), [session relay](../../server/interviews.ts#L38).
+On Live Research and Findings, a separate poller immediately fetches unfinished current-round sessions and repeats every four seconds. It mirrors returned state when there is transcript text or the call has ended, allowing a call to finish while its detail sheet is closed. Polling stops on page unmount or once the local record is completed. It does not cover past rounds, and requests are not serialized if a previous polling pass is still waiting.
+
+Sources: [consultant hook](../../frontend/src/components/live-call.tsx#L110), [participant publisher](../../frontend/src/routes/interview.$sessionId.tsx#L57), [session relay](../../server/interviews.ts#L38).
 
 ## Audio processing and adaptive questions
 
@@ -158,7 +165,7 @@ flowchart LR
   opening["POST /api/initial-questions<br/>OpenAI writes questions per person"]
   review["Consultant reviews and approves<br/>Plan and question list"]
   interviews["Real participant interviews<br/>Higgs + adaptive Claude questions"]
-  mirror["Session POST + SSE relay<br/>Mirror into local Interview records"]
+  mirror["Session POST + SSE / polling<br/>Mirror into local Interview records"]
   completed["All completed nonempty transcripts<br/>Current and past research rounds"]
   validation["POST /api/thesis-validation<br/>OpenAI assesses thesis and gaps"]
   filter["Server quote filter<br/>Normalized substring check per interview"]
@@ -193,7 +200,7 @@ For validation, the dashboard sends the company, full thesis, all hypotheses, an
 
 Next-round planning sends the latest assessment/gaps, contact list and completed transcripts back to OpenAI. Already-asked questions are included to discourage repetition. Proposed new people are role profiles, not contacted or verified recruits. Creating the round archives the existing plan/interview array and installs a new unapproved plan. Active/invited interviews are not resolved before that archive operation (A05).
 
-Sources: [opening questions](../../frontend/src/lib/initial-questions.ts), [validation payload/cache](../../frontend/src/lib/thesis-validation.ts), [server quote filter](../../server/validation.ts#L236), [already-asked context](../../server/validation.ts#L164), [next-round state transition](../../frontend/src/lib/next-round.ts#L138).
+Sources: [opening questions](../../frontend/src/lib/initial-questions.ts), [validation payload/cache](../../frontend/src/lib/thesis-validation.ts), [server quote filter](../../server/validation.ts#L237), [already-asked context](../../server/validation.ts#L165), [next-round state transition](../../frontend/src/lib/next-round.ts#L139).
 
 ## Data ownership and external processing
 
@@ -228,7 +235,7 @@ flowchart LR
   fullconfig --> runtime
   pcm <--> higgs
   runtime -->|"POST state"| state
-  state -->|"SSE mirror"| records
+  state -->|"SSE or current-session poll mirror"| records
   thesis --> openai
   contacts --> openai
   records --> openai
@@ -244,6 +251,6 @@ flowchart LR
 | Participant → Anthropic through Express | Interview goal, asked/remaining questions and entire current transcript | Provider key stays server-side |
 | Consultant → OpenAI through Express | Thesis, hypotheses, interview text and relevant person/contact metadata | Project CRUD and review edits stay browser-local |
 | Browser → LiveKit/Boson Avatar | Generated speech PCM; room/session credentials | AvatarLink does not publish participant mic audio into the room |
-| Participant → Express → consultant | Full CallState snapshots, including transcript and question changes | Server has latest state only; consultant stores the local project copy |
+| Participant → Express → consultant | Full CallState snapshots, including transcript and question changes; SSE while detail is open and current-session polling on Live/Findings | Server has latest state only; consultant stores the local project copy |
 
 The API trusts submitted state and transcripts. Quote matching therefore cannot establish that an interview actually occurred. Removing a local project does not delete an existing in-memory backend session; session IDs remain usable until eviction or process restart. External-provider retention and account settings were outside this code audit.

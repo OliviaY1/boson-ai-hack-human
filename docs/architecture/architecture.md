@@ -1,6 +1,6 @@
 # System architecture
 
-Snapshot: `9a82ca05d1b15d89209fe0dfd87f0e7d3995c88f`, 2026-10-24. These diagrams show implemented boundaries. Suggested future changes belong in [audit.md](audit.md).
+Snapshot: `f212a7046a2a4b66b4967c57d0528c4016737bf2`, 2026-10-24. These diagrams show implemented boundaries. Suggested future changes belong in [audit.md](audit.md).
 
 ## Main application
 
@@ -12,8 +12,11 @@ flowchart LR
     ui["Dashboard routes<br/>Sources / Plan / Live / Findings"]
     store["StoreProvider<br/>Current and archived rounds"]
     disk["localStorage<br/>diligence-live:v2"]
+    poller["useSyncSessions<br/>Unfinished current sessions<br/>Live / Findings pages"]
     ui <--> store
     store <--> disk
+    ui --> poller
+    poller --> store
   end
   subgraph participant["Participant browser - live call owner"]
     page["Interview link<br/>Start / Leave interview"]
@@ -37,6 +40,8 @@ flowchart LR
   room["LiveKit room<br/>Boson avatar media"]
   ui -->|"Create session / end request"| sessions
   sessions -->|"SSE: full call state"| ui
+  poller -->|"GET current session every 4 seconds"| sessions
+  sessions -->|"JSON snapshot"| poller
   page -->|"Get config / POST state"| sessions
   sessions -->|"SSE: endRequested"| page
   realtime -->|"GET /api/token"| tokens
@@ -53,7 +58,7 @@ flowchart LR
   link <-->|"PCM data stream / audio-video tracks"| room
 ```
 
-The consultant browser owns the project record. It prepares research, invites participants, subscribes to live session snapshots and saves transcripts locally. The participant browser owns the active call: microphone permissions, audio capture, Higgs WebSocket, adaptive question queue and avatar playback. The Express process brokers provider credentials/HTTP operations and relays call state; it is not the realtime audio relay.
+The consultant browser owns the project record. It prepares research, invites participants, subscribes to live session snapshots while an interview detail is open, and saves transcripts locally. Live Research and Findings also poll unfinished current-round sessions immediately and every four seconds, recovering state/completion while the detail sheet is closed. This poller operates only while one of those pages is mounted and does not synchronize archived rounds. The participant browser owns the active call: microphone permissions, audio capture, Higgs WebSocket, adaptive question queue and avatar playback. The Express process brokers provider credentials/HTTP operations and relays call state; it is not the realtime audio relay.
 
 The UI roles are not authenticated security roles. The session ID currently grants the same caller access to read config, replace state, subscribe and request termination. The config includes the investment thesis through the call goal. See findings A01-A02 before sharing this topology outside a controlled demo.
 
@@ -63,8 +68,9 @@ Relevant entry points:
 | --- | --- |
 | Project store and persistence | [frontend/src/lib/store.tsx](../../frontend/src/lib/store.tsx) |
 | Project routes | [frontend/src/routes](../../frontend/src/routes) |
-| Consultant session sender/watcher | [frontend/src/components/live-call.tsx](../../frontend/src/components/live-call.tsx#L109) |
-| Participant call owner | [frontend/src/routes/interview.$sessionId.tsx](../../frontend/src/routes/interview.$sessionId.tsx#L33) |
+| Consultant session sender/watcher | [frontend/src/components/live-call.tsx](../../frontend/src/components/live-call.tsx#L110) |
+| Background current-session synchronization | [useSyncSessions](../../frontend/src/components/live-call.tsx#L356) |
+| Participant call owner | [frontend/src/routes/interview.$sessionId.tsx](../../frontend/src/routes/interview.$sessionId.tsx#L34) |
 | UI-independent interview orchestration | [src/call/CallController.ts](../../src/call/CallController.ts) |
 | WebSocket/protocol orchestration | [src/realtime/RealtimeClient.ts](../../src/realtime/RealtimeClient.ts) |
 | API and state relay | [server/index.ts](../../server/index.ts), [server/interviews.ts](../../server/interviews.ts) |

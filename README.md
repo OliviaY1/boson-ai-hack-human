@@ -18,8 +18,8 @@ Two additions to the finished app:
 - **Speech & transcription** panel. Lists `input_audio_buffer.speech_started`,
   `input_audio_buffer.speech_stopped` and
   `conversation.item.input_audio_transcription.completed` as they arrive.
-- **Questions** box. After each of your turns (`speech_stopped`) the next question is sent
-  in a new `session.update`. After each transcription, Claude Haiku 5.5 (`POST /api/questions`
+- **Questions** box. Each time Alexa finishes a reply (`response.done`), the next question is
+  sent in a new `session.update`, so it is in place before the server starts her next reply. After each transcription, Claude Haiku 5.5 (`POST /api/questions`
   in `server/index.ts`) edits the questions not yet asked. Needs `ANTHROPIC_API_KEY` in `.env`.
 
 ## The parts

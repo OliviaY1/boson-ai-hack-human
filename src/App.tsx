@@ -51,8 +51,8 @@ function questionInstructions(question: string): string {
 
 /**
  * The step right after the greeting: the model itself decides whether the
- * person agreed, because the transcript of their answer arrives only after
- * speech_stopped, when this has to be sent.
+ * person agreed. This is sent when the greeting ends, before they answer, so
+ * the code cannot know their answer yet.
  */
 function firstQuestionInstructions(question: string, closing: string): string {
   return `You are Alexa, a market researcher. If the person said no, declined, or has no time, say exactly: "${closing}" Otherwise say exactly: "${question}" Nothing else.`;
@@ -134,8 +134,8 @@ export default function App() {
   const [instructions, setInstructions] = useState(DEFAULT_INSTRUCTIONS);
   const instructionsRef = useRef(instructions);
   instructionsRef.current = instructions;
-  // QUESTIONS: after each of your turns (speech_stopped), the next one is sent
-  // in its own session.update. The index resets on every Connect.
+  // QUESTIONS: each time Alexa finishes a reply (response.done), the next one is sent
+  // in its own session.update. Progress resets on every Connect.
   const [questions, setQuestions] = useState(DEFAULT_QUESTIONS);
   const questionsRef = useRef(questions);
   questionsRef.current = questions;
@@ -315,8 +315,8 @@ export default function App() {
 
       <label className="field">
         <span>
-          Questions — one per line. After you stop speaking, the first one Alexa has not said
-          yet is sent in a new session.update (said so far: {askedCount}). Claude Haiku 5.5
+          Questions — one per line. Each time Alexa finishes a reply, the first one she has not
+          said yet is sent in a new session.update, ready for her next turn (said so far: {askedCount}). Claude Haiku 5.5
           edits the ones not yet said after each of your turns — {claudeStatus}
         </span>
         <textarea value={questions} onChange={(e) => setQuestions(e.target.value)} rows={4} />

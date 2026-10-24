@@ -57,9 +57,9 @@ export interface RealtimeCallbacks {
    */
   speakFirst?: boolean;
   /**
-   * Called on every input_audio_buffer.speech_stopped (you finished a turn).
-   * Return new instructions to send them in a session.update right away, or
-   * null to send nothing.
+   * Called each time an assistant reply ends (response.done, unless a tool
+   * call means another reply is coming). Return the instructions for the NEXT
+   * reply to send them in a session.update right away, or null to send nothing.
    */
   nextInstructions?: () => string | null;
   /**
@@ -321,13 +321,9 @@ export class RealtimeClient {
         break;
       }
 
-      case SERVER.speechStopped: {
+      case SERVER.speechStopped:
         this.setActivity("thinking");
-        // You finished a turn: send the next instructions, if there are any.
-        const next = this.cb.nextInstructions?.();
-        if (next) this.send(buildSessionConfig(next));
         break;
-      }
 
       case SERVER.sessionCreated:
         this.sessionReady = true;
@@ -468,6 +464,12 @@ export class RealtimeClient {
       void this.flushToolBatch();
     } else {
       this.setActivity(this.capture.active ? "listening" : "idle");
+      // Alexa's turn is over: load the instructions for her NEXT reply now,
+      // before you answer. The server starts that reply by itself the moment
+      // its VAD hears you stop, so instructions sent at speech_stopped arrive
+      // too late for it.
+      const next = this.cb.nextInstructions?.();
+      if (next) this.send(buildSessionConfig(next));
     }
   }
 

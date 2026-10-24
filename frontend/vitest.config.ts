@@ -11,6 +11,10 @@ export default defineConfig({
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
   },
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      // Shared Higgs Realtime / Avatar call code at the repo root (see tsconfig paths).
+      "@higgs": path.resolve(__dirname, "../src"),
+    },
   },
 });

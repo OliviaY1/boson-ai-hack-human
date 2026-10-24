@@ -1,0 +1,34 @@
+flowchart LR
+  thesis["Consultant enters<br/>Company and investment thesis"]
+  contacts["Contacts<br/>Custom entries + static demo networks"]
+  plan["Local research-plan builder<br/>Parse thesis pillars or use templates"]
+  opening["POST /api/initial-questions<br/>OpenAI writes questions per person"]
+  review["Consultant reviews and approves<br/>Plan and question list"]
+  interviews["Real participant interviews<br/>Higgs + adaptive Claude questions"]
+  mirror["Session POST + SSE relay<br/>Mirror into local Interview records"]
+  completed["All completed nonempty transcripts<br/>Current and past research rounds"]
+  validation["POST /api/thesis-validation<br/>OpenAI assesses thesis and gaps"]
+  filter["Server quote filter<br/>Normalized substring check per interview"]
+  findings["Findings screen<br/>Assessments / quotes / gaps"]
+  proposal["POST /api/next-round<br/>OpenAI proposes hypotheses, people, questions"]
+  decision["Consultant creates next round"]
+  archive["Archive current plan and interviews<br/>Install proposed plan / add new contacts"]
+  store["Browser project store and localStorage<br/>Cached validation and proposal"]
+  thesis --> plan
+  contacts --> plan
+  plan --> opening
+  opening -->|"Success"| review
+  opening -.->|"Failure retains template questions"| review
+  review --> interviews --> mirror --> completed
+  completed --> validation
+  thesis --> validation
+  validation --> filter --> findings
+  findings --> proposal
+  completed --> proposal
+  contacts --> proposal
+  proposal --> decision --> archive --> review
+  archive --> completed
+  mirror --> store
+  filter --> store
+  proposal --> store
+  plan --> store

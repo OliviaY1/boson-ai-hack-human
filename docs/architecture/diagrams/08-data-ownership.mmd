@@ -1,0 +1,35 @@
+flowchart LR
+  subgraph consultant["Consultant browser storage"]
+    thesis["Company / thesis / assumptions"]
+    contacts["Contact details / research plans"]
+    records["Transcripts / rounds / reviews<br/>Validation / next-round cache"]
+  end
+  subgraph api["Express process memory"]
+    config["Session config and display<br/>Includes interview goal and thesis"]
+    state["Latest full CallState<br/>Transcript and question queue"]
+    secrets["Provider keys and LiveKit secret<br/>Loaded server-side"]
+  end
+  subgraph participant["Participant browser memory"]
+    fullconfig["Downloaded session config"]
+    pcm["Microphone PCM and generated audio"]
+    runtime["Call state / transcript / ephemeral tokens"]
+  end
+  subgraph external["External processing boundaries"]
+    higgs["Boson<br/>Microphone audio / instructions / STT"]
+    anthropic["Anthropic<br/>Goal + full transcript + question lists"]
+    openai["OpenAI<br/>Thesis / interview text / contacts"]
+    livekit["LiveKit + Boson Avatar<br/>Generated speech and avatar media"]
+  end
+  thesis --> config
+  contacts --> config
+  config -->|"GET by session ID"| fullconfig
+  fullconfig --> runtime
+  pcm <--> higgs
+  runtime -->|"POST state"| state
+  state -->|"SSE mirror"| records
+  thesis --> openai
+  contacts --> openai
+  records --> openai
+  runtime -->|"Via /api/questions"| anthropic
+  pcm -->|"Generated output only"| livekit
+  secrets -->|"Authorize server requests / sign room tokens"| external

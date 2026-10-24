@@ -1,0 +1,56 @@
+erDiagram
+  PROJECT ||--o{ EXPERT : owns_contacts
+  PROJECT ||--o| RESEARCH_PLAN : current_plan
+  PROJECT ||--o{ INTERVIEW : current_interviews
+  PROJECT ||--o{ RESEARCH_ROUND : past_rounds
+  PROJECT ||--o| THESIS_VALIDATION : caches
+  PROJECT ||--o| NEXT_ROUND_PROPOSAL : caches
+  PROJECT ||--o{ FINDING_REVIEW : records
+  RESEARCH_ROUND ||--|| RESEARCH_PLAN : archives
+  RESEARCH_ROUND ||--o{ INTERVIEW : archives
+  RESEARCH_PLAN ||--o{ HYPOTHESIS : contains
+  RESEARCH_PLAN ||--o{ PLAN_EXPERT : contains
+  PLAN_EXPERT }o--|| EXPERT : references_id
+  PLAN_EXPERT }o--o{ HYPOTHESIS : hypothesis_ids
+  PLAN_EXPERT ||--o{ PLAN_QUESTION : contains
+  EXPERT ||--o{ INTERVIEW : referenced_by_id
+  INTERVIEW ||--o{ INTERVIEW_QUESTION : contains
+  INTERVIEW ||--o{ TRANSCRIPT_TURN : contains
+  INTERVIEW ||--o{ FINDING : legacy_findings
+  INTERVIEW ||--o| BACKEND_SESSION : optional_session_id
+  FINDING }o--|| HYPOTHESIS : hypothesis_id
+  FINDING }o--|| TRANSCRIPT_TURN : turn_id
+  THESIS_VALIDATION ||--o{ ASSESSMENT : contains
+  ASSESSMENT }o--|| HYPOTHESIS : hypothesis_id
+  ASSESSMENT ||--o{ QUOTED_EVIDENCE : contains
+  QUOTED_EVIDENCE }o--|| INTERVIEW : interview_id
+  THESIS_VALIDATION ||--o{ RESEARCH_GAP : contains
+  NEXT_ROUND_PROPOSAL ||--|| RESEARCH_PLAN : proposed_plan
+  NEXT_ROUND_PROPOSAL ||--o{ EXPERT : new_contact_profiles
+  PROJECT {
+    string id
+    string company
+    string thesis
+    string status
+    string updatedAt
+  }
+  INTERVIEW {
+    string id
+    string expertId
+    string status
+    string sessionId
+    boolean live
+  }
+  BACKEND_SESSION {
+    string id
+    number createdAt
+    unknown config
+    unknown state
+    boolean endRequested
+  }
+  THESIS_VALIDATION {
+    string model
+    string at
+    string inputKey
+    number droppedQuotes
+  }

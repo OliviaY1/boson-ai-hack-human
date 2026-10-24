@@ -1,0 +1,41 @@
+flowchart LR
+  subgraph interfaces["Browser interfaces - separate installations"]
+    dashboard["Diligence Live dashboard<br/>React 19 / TanStack Start + Router<br/>Tailwind 4 / Radix UI / TypeScript<br/>fetch / EventSource in UI"]
+    tutorial["Original tutorial and debug UI<br/>React 18 / Vite 6 / TypeScript"]
+  end
+  subgraph shared["Shared browser implementation in src/"]
+    controller["CallController<br/>Interview queue and transcript"]
+    realtimeClient["RealtimeClient<br/>WebSocket / session events / token fetch"]
+    media["Web Audio / AudioWorklet / getUserMedia<br/>24 kHz mono PCM16 / base64"]
+    avatar["Optional AvatarLink<br/>LiveKit browser SDK 2.15.0 via CDN"]
+  end
+  subgraph backend["Node API process in server/"]
+    api["Express 4 / TypeScript / tsx<br/>dotenv / native fetch / node:crypto"]
+    memory["In-process interview Map<br/>SSE response streams"]
+  end
+  subgraph providers["External services used by main application"]
+    boson["Boson Higgs Realtime + STT<br/>Optional Higgs Avatar"]
+    anthropic["Anthropic<br/>claude-haiku-5-5 question revisions"]
+    openai["OpenAI Chat Completions<br/>Configured or discovered GPT-6 model"]
+    livekit["LiveKit service<br/>Avatar room and media transport"]
+  end
+  subgraph storage["Browser persistence"]
+    local["React context + localStorage<br/>Projects, rounds, transcripts, cached analysis"]
+  end
+  dashboard --> controller
+  tutorial --> realtimeClient
+  controller --> realtimeClient
+  dashboard --> local
+  realtimeClient --> media
+  controller --> avatar
+  tutorial --> avatar
+  controller --> api
+  realtimeClient --> api
+  dashboard --> api
+  api --> memory
+  realtimeClient --> boson
+  api --> boson
+  api --> anthropic
+  api --> openai
+  api --> livekit
+  avatar --> livekit

@@ -1,0 +1,66 @@
+sequenceDiagram
+  autonumber
+  actor C as Consultant
+  participant D as Dashboard browser
+  participant A as Express API
+  participant P as Participant browser
+  participant H as Boson Higgs
+  participant L as LiveKit and Boson Avatar
+  participant Q as Anthropic
+  C->>D: Approve plan and send interview
+  D->>A: POST /api/interviews {config, display}
+  A-->>D: Session ID
+  D->>A: GET /api/interviews/:id/events
+  A-->>D: Initial SSE snapshot
+  D-->>C: Participant URL
+  P->>A: GET /api/interviews/:id
+  A-->>P: Config, display and last state
+  P->>A: Subscribe to session SSE for endRequested
+  Note over P: Participant clicks Start
+  opt Avatar configured and startup succeeds
+    P->>A: POST /api/avatar/start
+    A->>L: Create room, sign tokens, start avatar session
+    L-->>A: Avatar session ID
+    A-->>P: Browser room token and session metadata
+    P->>L: Join room and subscribe to avatar tracks
+  end
+  P->>A: GET /api/token
+  A->>H: POST /v1/realtime/client_secrets
+  H-->>A: Ephemeral credential
+  A-->>P: Credential and expiry
+  P->>H: Open WebSocket, send session.update on open
+  par Provider session handshake
+    H-->>P: Session acknowledgment
+  and Microphone initialization after socket-open
+    P->>P: Request microphone permission, start capture and worklet
+    P->>H: Begin microphone PCM append stream
+  end
+  P->>H: response.create when session and mic are ready
+  H-->>P: Generated greeting audio and transcript
+  loop During interview
+    H-->>P: VAD, transcript and response events
+    P->>A: POST /api/interviews/:id/state
+    A-->>D: SSE snapshot
+    D->>D: Mirror interview into project and localStorage
+    P->>A: POST /api/questions with transcript and queue
+    A->>Q: Request question additions and removals
+    Q-->>A: Question revision JSON
+    A-->>P: Sanitized question changes
+    P->>P: Revise pending rows
+    Note over P,H: response.done installs the next question.<br/>Question revisions run independently.
+  end
+  alt Consultant ends interview
+    C->>D: End call
+    D->>A: POST /api/interviews/:id/end
+    A-->>P: SSE endRequested = true
+  else Participant leaves or scripted closing completes
+    P->>P: Stop call
+  end
+  P->>H: Close WebSocket and stop capture
+  opt Avatar active
+    P->>A: POST /api/avatar/stop
+    A->>L: Delete Boson avatar session
+  end
+  P->>A: POST final state with keepalive requested
+  A-->>D: SSE ended snapshot
+  D->>D: Save completed transcript locally

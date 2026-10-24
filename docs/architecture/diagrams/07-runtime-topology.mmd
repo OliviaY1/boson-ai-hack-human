@@ -1,0 +1,37 @@
+flowchart TB
+  subgraph main["Main TypeScript application"]
+    user["Browser"]
+    debug["Root Vite debug UI<br/>localhost:5173"]
+    dashboard["Dashboard Vite / TanStack Start<br/>Port selected by config wrapper"]
+    express["Express API<br/>localhost:3000 by default"]
+    boson["Boson HTTP + Realtime WebSocket"]
+    llms["OpenAI + Anthropic HTTP APIs"]
+    avatar["Optional LiveKit + Boson Avatar"]
+    user --> debug
+    user --> dashboard
+    debug -->|"Dev /api proxy"| express
+    dashboard -->|"Dev /api proxy"| express
+    user <-->|"Direct realtime connection"| boson
+    express --> boson
+    express --> llms
+    user <--> avatar
+    express --> avatar
+  end
+  subgraph pipecat["Alternative tutorial - not the dashboard backend"]
+    pui["Bundled Pipecat playground<br/>localhost:7860"]
+    pworker["Python bot.py<br/>Pipecat + Boson plugin"]
+    ptools["Local search and time tools<br/>Optional Parallel search API"]
+    pui <-->|"WebRTC / RTVI"| pworker
+    pworker --> ptools
+    pworker <-->|"WebSocket"| boson
+  end
+  subgraph agents["Alternative tutorial - independent LiveKit Agents worker"]
+    lui["External Agents Playground<br/>localhost:3000 by default"]
+    lserver["Development LiveKit server<br/>ws://127.0.0.1:7880"]
+    lworker["Python agent.py<br/>LiveKit Agents + Boson plugin"]
+    ltools["Local search and time tools<br/>Optional Parallel search API"]
+    lui <--> lserver
+    lserver <--> lworker
+    lworker --> ltools
+    lworker <-->|"WebSocket"| boson
+  end

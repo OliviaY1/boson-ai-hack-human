@@ -1,0 +1,44 @@
+flowchart LR
+  subgraph consultant["Consultant browser - project owner"]
+    ui["Dashboard routes<br/>Sources / Plan / Live / Findings"]
+    store["StoreProvider<br/>Current and archived rounds"]
+    disk["localStorage<br/>diligence-live:v2"]
+    ui <--> store
+    store <--> disk
+  end
+  subgraph participant["Participant browser - live call owner"]
+    page["Interview link<br/>Start / Leave interview"]
+    sessioncontroller["CallController<br/>Question queue + transcript"]
+    realtime["RealtimeClient<br/>MicCapture + RingPlayer"]
+    link["Optional AvatarLink"]
+    page --> sessioncontroller
+    sessioncontroller --> realtime
+    sessioncontroller --> link
+  end
+  subgraph node["Express API - server-side provider keys"]
+    sessions["Interview endpoints<br/>In-memory session Map + SSE"]
+    tokens["Ephemeral token endpoint"]
+    questions["Opening and adaptive questions"]
+    analysis["Thesis validation + next round"]
+    avatar["Avatar room/session endpoints"]
+  end
+  higgs["Boson Higgs Realtime<br/>Audio + STT over WebSocket"]
+  claude["Anthropic API"]
+  gpt["OpenAI API"]
+  room["LiveKit room<br/>Boson avatar media"]
+  ui -->|"Create session / end request"| sessions
+  sessions -->|"SSE: full call state"| ui
+  page -->|"Get config / POST state"| sessions
+  sessions -->|"SSE: endRequested"| page
+  realtime -->|"GET /api/token"| tokens
+  tokens -->|"Mint short-lived credential"| higgs
+  realtime <-->|"Direct audio / event WebSocket"| higgs
+  ui -->|"Initial questions"| questions
+  sessioncontroller -->|"Transcript / remaining questions"| questions
+  questions --> claude
+  questions --> gpt
+  ui -->|"Completed transcripts / thesis / contacts"| analysis
+  analysis --> gpt
+  link -->|"Start / stop avatar"| avatar
+  avatar -->|"Create room + Boson session"| room
+  link <-->|"PCM data stream / audio-video tracks"| room

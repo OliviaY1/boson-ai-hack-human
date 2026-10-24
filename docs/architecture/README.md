@@ -1,0 +1,45 @@
+# Diligence Live architecture reference
+
+Audited on **2026-10-24**, against commit [`9a82ca05d1b15d89209fe0dfd87f0e7d3995c88f`](https://github.com/OliviaY1/boson-ai-hack-human/tree/9a82ca05d1b15d89209fe0dfd87f0e7d3995c88f). Commit subject: “GPT-6 context: questions asked / not reached / dropped, hypothesis text”. The audit describes that snapshot; concurrent and later development can change these conclusions.
+
+Diligence Live combines a browser-persisted research dashboard, a shared browser voice engine, and a small Express API for provider access and interview-state relay. The repository also contains the original tutorial/debug app and two independent Python tutorial implementations.
+
+## Read this documentation
+
+| Document | Purpose |
+| --- | --- |
+| [Tech stack](tech-stack.md) | Dependencies, source map, endpoints, configuration and ownership of stored data |
+| [Architecture](architecture.md) | System boundaries, runtime topology and logical domain model |
+| [Data flows](data-flows.md) | Interview sequence, audio/adaptation pipeline and iterative research flow |
+| [Audit findings](audit.md) | Prioritized defects and risks, evidence, practical impact and suggested follow-up |
+| [Verification](verification.md) | Checks actually performed, results, limitations and diagram regeneration |
+
+## Reusable diagrams
+
+The Markdown pages include Mermaid code blocks that GitHub can render. Each diagram also has an editable standalone `.mmd` source and an SVG export for slides, documents and other tools.
+
+| Diagram | Editable source | Export |
+| --- | --- | --- |
+| Technology stack | [01-tech-stack.mmd](diagrams/01-tech-stack.mmd) | [SVG](diagrams/01-tech-stack.svg) |
+| System architecture | [02-system-architecture.mmd](diagrams/02-system-architecture.mmd) | [SVG](diagrams/02-system-architecture.svg) |
+| Interview sequence | [03-interview-sequence.mmd](diagrams/03-interview-sequence.mmd) | [SVG](diagrams/03-interview-sequence.svg) |
+| Audio and question adaptation | [04-audio-and-adaptation.mmd](diagrams/04-audio-and-adaptation.mmd) | [SVG](diagrams/04-audio-and-adaptation.svg) |
+| Research data flow | [05-research-data-flow.mmd](diagrams/05-research-data-flow.mmd) | [SVG](diagrams/05-research-data-flow.svg) |
+| Logical domain model | [06-domain-model.mmd](diagrams/06-domain-model.mmd) | [SVG](diagrams/06-domain-model.svg) |
+| Runtime topology and Python alternatives | [07-runtime-topology.mmd](diagrams/07-runtime-topology.mmd) | [SVG](diagrams/07-runtime-topology.svg) |
+| Data ownership and external processing | [08-data-ownership.mmd](diagrams/08-data-ownership.mmd) | [SVG](diagrams/08-data-ownership.svg) |
+
+## Placement and maintenance
+
+Everything added for this audit is under `docs/architecture/`. The existing numbered tutorials remain in `docs/part-*.md`. No application source, package manifest, lockfile, configuration, root README or existing tutorial needs to change to use these references. This directory is outside the checked-in application/test entry points.
+
+The work was prepared in a managed worktree pinned to the audit SHA, protecting the active checkout. No provider credentials were copied into it, and no live model, microphone or avatar sessions were used for the audit.
+
+For an update:
+
+1. Record the new audited SHA and date here and in [verification.md](verification.md).
+2. Trace changed behavior from source; keep existing implementation and proposed improvements clearly identified.
+3. Edit the affected `.mmd` source, replace the matching Mermaid block in its Markdown page, and regenerate its SVG.
+4. Check source links and render each changed diagram. Record application checks separately from diagram checks.
+
+Versions in this reference come from committed manifests and lockfiles. Provider model IDs describe configured requests, rather than a claim that those models were available or exercised during this audit. Findings link to local source paths with line fragments; the pinned commit above is the stable reference if line numbers move.

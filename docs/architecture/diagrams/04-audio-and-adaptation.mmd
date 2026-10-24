@@ -1,0 +1,42 @@
+flowchart LR
+  subgraph input["Participant microphone path"]
+    mic["getUserMedia<br/>Mono / echo cancellation"]
+    capture["Capture AudioWorklet<br/>Browser sample rate"]
+    resample["Stateful resampler<br/>Float32 to PCM16 at 24 kHz"]
+    append["Base64 audio<br/>input_audio_buffer.append"]
+    mic --> capture --> resample --> append
+  end
+  higgs["Boson Higgs Realtime<br/>Server VAD / STT / audio responses"]
+  append -->|"Direct browser WebSocket"| higgs
+  subgraph output["Generated audio output - one selected sink"]
+    delta["response.output_audio.delta<br/>Decode base64 PCM16"]
+    sink{"Avatar attached?"}
+    player["RingPlayer + playback AudioWorklet<br/>Local speakers / playback position"]
+    stream["AvatarLink<br/>LiveKit lk.audio_stream<br/>Start / PCM bytes / end"]
+    tracks["Boson avatar in LiveKit room<br/>Lip-synced audio-video tracks"]
+    delta --> sink
+    sink -->|"No"| player
+    sink -->|"Yes"| stream --> tracks
+  end
+  higgs --> delta
+  subgraph adaptation["Transcript and question control path"]
+    reducer["Event reducer<br/>Items ordered by previous_item_id"]
+    queue["CallController<br/>Pending / said / removed question rows"]
+    api["POST /api/questions<br/>Goal + transcript + asked / remaining"]
+    claude["Claude Haiku 5.5<br/>Question revision JSON"]
+    boundary["response.done<br/>Choose next instructions"]
+    update["session.update<br/>Exact next-question instructions"]
+    reducer --> api --> claude --> queue
+    queue --> boundary --> update
+  end
+  higgs -->|"Input and output transcript events"| reducer
+  higgs -->|"Output transcript done marks said rows"| queue
+  update --> higgs
+  barge["speech_started / barge-in"]
+  higgs --> barge
+  barge -->|"Flush local audio"| player
+  barge -->|"lk.clear_buffer"| stream
+  position["Played position<br/>Local counter or avatar feedback"]
+  player --> position
+  stream --> position
+  position -->|"conversation.item.truncate"| higgs

@@ -74,6 +74,9 @@ app.post("/api/questions", async (req, res) => {
     `Transcript so far:\n${String(transcript)}`,
   ].join("\n\n");
 
+  // Echoed back to the browser so the UI can show exactly what was sent.
+  const prompt = { model: QUESTION_MODEL, system, user: userMessage };
+  const startedAt = Date.now();
   try {
     const upstream = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -92,7 +95,9 @@ app.post("/api/questions", async (req, res) => {
     const body = await upstream.text();
     if (!upstream.ok) {
       console.error(`anthropic ${upstream.status}: ${body}`);
-      return res.status(upstream.status).json({ error: `Anthropic ${upstream.status}: ${body}` });
+      return res
+        .status(upstream.status)
+        .json({ error: `Anthropic ${upstream.status}: ${body}`, prompt, ms: Date.now() - startedAt });
     }
     const data = JSON.parse(body) as { content?: Array<{ type: string; text?: string }> };
     const text = (data.content ?? [])
@@ -104,10 +109,20 @@ app.post("/api/questions", async (req, res) => {
     const parsed = match ? (JSON.parse(match[0]) as { add?: unknown; remove?: unknown }) : {};
     const strings = (v: unknown) =>
       Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
-    return res.json({ add: strings(parsed.add), remove: strings(parsed.remove), raw: text });
+    return res.json({
+      add: strings(parsed.add),
+      remove: strings(parsed.remove),
+      raw: text,
+      prompt,
+      ms: Date.now() - startedAt,
+    });
   } catch (err) {
     console.error("question update error:", err);
-    return res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+    return res.status(502).json({
+      error: err instanceof Error ? err.message : String(err),
+      prompt,
+      ms: Date.now() - startedAt,
+    });
   }
 });
 

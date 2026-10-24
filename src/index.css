@@ -111,6 +111,10 @@ input {
   color: var(--accent);
 }
 
+.session-event .dir-error {
+  color: var(--error);
+}
+
 .session-event .dir-recv {
   color: var(--ok);
 }

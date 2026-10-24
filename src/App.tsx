@@ -17,6 +17,7 @@ import { MicButton } from "./ui/MicButton";
 import { SessionPanel } from "./ui/SessionPanel";
 import { VoiceEventsPanel } from "./ui/VoiceEventsPanel";
 import { SpeechTimeline } from "./ui/SpeechTimeline";
+import { LlmPanel, type LlmCall } from "./ui/LlmPanel";
 import { StatusBar } from "./ui/StatusBar";
 
 /**
@@ -77,15 +78,21 @@ async function fetchQuestionChanges(payload: {
   asked: string[];
   remaining: string[];
   transcript: string;
-}): Promise<{ add: string[]; remove: string[] }> {
-  const res = await fetch("/api/questions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-  return { add: body.add ?? [], remove: body.remove ?? [] };
+}): Promise<Omit<LlmCall, "id" | "at">> {
+  try {
+    const res = await fetch("/api/questions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await res.json();
+    const prompt = body.prompt ?? {};
+    const common = { model: prompt.model, system: prompt.system, user: prompt.user, ms: body.ms };
+    if (!res.ok) return { ...common, status: "error", error: body.error ?? `HTTP ${res.status}` };
+    return { ...common, status: "ok", raw: body.raw, add: body.add ?? [], remove: body.remove ?? [] };
+  } catch (e) {
+    return { status: "error", error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /** Ask our own server for a fresh ephemeral key. One per connection. */
@@ -107,6 +114,9 @@ export default function App() {
   const transcriptRef = useRef<TranscriptState>(emptyTranscript);
   // What Claude did last, shown next to the questions box.
   const [claudeStatus, setClaudeStatus] = useState("not called yet");
+  // Every Claude call, newest last, for the panel under the questions box.
+  const [llmCalls, setLlmCalls] = useState<LlmCall[]>([]);
+  const llmSeq = useRef(0);
   const [micActive, setMicActive] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
@@ -136,28 +146,33 @@ export default function App() {
     const before = splitQuestions(questionsRef.current);
     const askedCount = Math.min(questionIndexRef.current, before.length);
     setClaudeStatus("updating…");
-    try {
-      const { add, remove } = await fetchQuestionChanges({
-        context: instructionsRef.current,
-        asked: before.slice(0, askedCount),
-        remaining: before.slice(askedCount),
-        transcript: toPlainText(transcriptRef.current),
-      });
-      // Re-read the list: you may have edited it, or a question may have been
-      // sent, while Claude was thinking.
-      const now = splitQuestions(questionsRef.current);
-      const asked = now.slice(0, Math.min(questionIndexRef.current, now.length));
-      const drop = new Set(remove.map((q) => q.trim().toLowerCase()));
-      const remaining = now
-        .slice(asked.length)
-        .filter((q) => !drop.has(q.toLowerCase()));
-      const updated = [...asked, ...remaining, ...add.map((q) => q.trim())].join("\n");
-      questionsRef.current = updated;
-      setQuestions(updated);
-      setClaudeStatus(`last update ${new Date().toLocaleTimeString(undefined, { hour12: false })}: +${add.length} −${remove.length}`);
-    } catch (e) {
-      setClaudeStatus(`error: ${e instanceof Error ? e.message : String(e)}`);
+    const id = ++llmSeq.current;
+    setLlmCalls((calls) => [...calls, { id, at: Date.now(), status: "pending" }]);
+    const result = await fetchQuestionChanges({
+      context: instructionsRef.current,
+      asked: before.slice(0, askedCount),
+      remaining: before.slice(askedCount),
+      transcript: toPlainText(transcriptRef.current),
+    });
+    setLlmCalls((calls) => calls.map((c) => (c.id === id ? { ...c, ...result } : c)));
+    if (result.status === "error") {
+      setClaudeStatus(`error: ${result.error}`);
+      return;
     }
+    const add = result.add ?? [];
+    const remove = result.remove ?? [];
+    // Re-read the list: you may have edited it, or a question may have been
+    // sent, while Claude was thinking.
+    const now = splitQuestions(questionsRef.current);
+    const asked = now.slice(0, Math.min(questionIndexRef.current, now.length));
+    const drop = new Set(remove.map((q) => q.trim().toLowerCase()));
+    const remaining = now
+      .slice(asked.length)
+      .filter((q) => !drop.has(q.toLowerCase()));
+    const updated = [...asked, ...remaining, ...add.map((q) => q.trim())].join("\n");
+    questionsRef.current = updated;
+    setQuestions(updated);
+    setClaudeStatus(`last update ${new Date().toLocaleTimeString(undefined, { hour12: false })}: +${add.length} −${remove.length}`);
   }
 
   // The client outlives re-renders, so it lives in a ref rather than state.
@@ -268,6 +283,8 @@ export default function App() {
         </span>
         <textarea value={closing} onChange={(e) => setClosing(e.target.value)} rows={2} />
       </label>
+
+      <LlmPanel calls={llmCalls} />
 
       <StatusBar connection={connection} activity={activity} closeMessage={closeMessage} />
 

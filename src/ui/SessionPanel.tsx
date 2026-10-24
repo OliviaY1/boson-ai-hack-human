@@ -56,7 +56,8 @@ export function SessionPanel({
                     {new Date(e.at).toLocaleTimeString(undefined, { hour12: false })}
                   </span>
                 </div>
-                {text !== undefined && <pre>{text}</pre>}
+                {/* Only what we sent; the server's ack would repeat the same text. */}
+                {e.dir === "send" && text !== undefined && <pre>{text}</pre>}
                 <details>
                   <summary>Full event</summary>
                   <pre>{JSON.stringify(e.raw, null, 2)}</pre>

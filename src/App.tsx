@@ -30,8 +30,10 @@ const DEFAULT_QUESTIONS = [
   "Which sports brand do you buy most?",
   "Why that brand?",
   "Are you buying more Nike this year, or less?",
-  "That's all. Thank you!",
 ].join("\n");
+
+/** Sent in one more session.update after the answer to the last question. */
+const DEFAULT_CLOSING = "That's all my questions. Thank you so much for your time, have a great day!";
 
 /** The short instructions sent for each question. */
 function questionInstructions(question: string): string {
@@ -69,6 +71,9 @@ export default function App() {
   questionsRef.current = questions;
   const questionIndexRef = useRef(0);
   const [questionIndex, setQuestionIndex] = useState(0);
+  const [closing, setClosing] = useState(DEFAULT_CLOSING);
+  const closingRef = useRef(closing);
+  closingRef.current = closing;
 
   // The client outlives re-renders, so it lives in a ref rather than state.
   const clientRef = useRef<RealtimeClient | null>(null);
@@ -82,11 +87,13 @@ export default function App() {
           .split("\n")
           .map((q) => q.trim())
           .filter(Boolean);
+        // The closing line counts as one more step after the last question.
+        const steps = closingRef.current.trim() ? [...list, closingRef.current.trim()] : list;
         const i = questionIndexRef.current;
-        if (i >= list.length) return null;
+        if (i >= steps.length) return null;
         questionIndexRef.current = i + 1;
         setQuestionIndex(i + 1);
-        return questionInstructions(list[i]);
+        return questionInstructions(steps[i]);
       },
       onConnectionState: setConnection,
       onActivity: setActivity,
@@ -162,6 +169,11 @@ export default function App() {
           session.update (sent so far: {questionIndex})
         </span>
         <textarea value={questions} onChange={(e) => setQuestions(e.target.value)} rows={4} />
+      </label>
+
+      <label className="field">
+        <span>Closing — sent in one more session.update after the last question is answered</span>
+        <textarea value={closing} onChange={(e) => setClosing(e.target.value)} rows={2} />
       </label>
 
       <StatusBar connection={connection} activity={activity} closeMessage={closeMessage} />

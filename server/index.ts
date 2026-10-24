@@ -47,9 +47,11 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY?.trim();
 const QUESTION_MODEL = "claude-haiku-5-5";
 
 const QUESTION_SYSTEM =
-  "Update the question list for a live voice interview. Remove remaining questions that are " +
-  "answered or irrelevant; add at most 2 short follow-ups (under 12 words). Reply only with " +
-  'JSON {"add":[],"remove":[]}, copying removed questions exactly.';
+  "You are an expert consumer-research interviewer for a private equity firm, updating the " +
+  "question list of a live voice interview. Follow up on what the person just said: remove " +
+  "remaining questions that are answered or no longer fit them, and add up to 2 short " +
+  "follow-ups (under 12 words) that serve the interview goal. Reply only with JSON " +
+  '{"add":[],"remove":[]}, copying removed questions exactly.';
 
 /**
  * POST /api/questions  { context, asked: string[], remaining: string[], transcript }
@@ -67,7 +69,7 @@ app.post("/api/questions", async (req, res) => {
   // The context goes into the system prompt, ahead of everything that changes
   // per call. The API keeps no state between calls, so it is still sent every
   // time; putting the unchanging part first is what prompt caching needs.
-  const system = context ? `${QUESTION_SYSTEM}\n\nInterview context:\n${String(context)}` : QUESTION_SYSTEM;
+  const system = context ? `${QUESTION_SYSTEM}\n\nInterview goal:\n${String(context)}` : QUESTION_SYSTEM;
   const userMessage = [
     `Already asked:\n${list(asked)}`,
     `Remaining, in order:\n${list(remaining)}`,

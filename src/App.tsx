@@ -28,6 +28,12 @@ import { StatusBar } from "./ui/StatusBar";
 const DEFAULT_INSTRUCTIONS = `You are Alexa from a private equity firm. Say exactly: "Hi, I'm Alexa from a private equity firm. Do you have one minute for a few quick questions about Nike?" Nothing else.`;
 
 /** One per line. Each is sent in its own session.update after you finish a turn. */
+/** What the interview is for. Sent to Claude as context with every call. */
+const DEFAULT_GOAL =
+  "Private equity consumer research on Nike: which sports brands people buy and why, " +
+  "how their Nike spending is changing, and, for people who don't buy Nike or sports " +
+  "brands, why not.";
+
 const DEFAULT_QUESTIONS = [
   "Which sports brand do you buy most?",
   "Why that brand?",
@@ -51,10 +57,10 @@ function firstQuestionInstructions(question: string, closing: string): string {
   return `You are Alexa, a market researcher. If the person said no, declined, or has no time, say exactly: "${closing}" Otherwise say exactly: "${question}" Nothing else.`;
 }
 
-/** Did this reply say the closing line? Compared word by word, ignoring case and punctuation. */
-function saidClosing(reply: string, closing: string): boolean {
+/** Did this reply say this line? Compared word by word, ignoring case and punctuation. */
+function saidLine(reply: string, line: string): boolean {
   const words = (t: string) => t.toLowerCase().match(/[a-z0-9']+/g) ?? [];
-  const target = words(closing);
+  const target = words(line);
   if (target.length === 0) return false;
   const said = new Set(words(reply));
   const hits = target.filter((w) => said.has(w)).length;
@@ -131,8 +137,16 @@ export default function App() {
   const [questions, setQuestions] = useState(DEFAULT_QUESTIONS);
   const questionsRef = useRef(questions);
   questionsRef.current = questions;
-  const questionIndexRef = useRef(0);
-  const [questionIndex, setQuestionIndex] = useState(0);
+  // A question counts as ASKED only once Alexa has actually said it (her
+  // transcript matches it), not when it was sent. The next one sent is always
+  // the first question she has not said yet.
+  const askedRef = useRef<Set<string>>(new Set());
+  const [askedCount, setAskedCount] = useState(0);
+  const greetingAnsweredRef = useRef(false);
+  const closingSentRef = useRef(false);
+  const [goal, setGoal] = useState(DEFAULT_GOAL);
+  const goalRef = useRef(goal);
+  goalRef.current = goal;
   const [closing, setClosing] = useState(DEFAULT_CLOSING);
   const closingRef = useRef(closing);
   closingRef.current = closing;
@@ -142,16 +156,17 @@ export default function App() {
    * changes to the questions not asked yet. Asked questions stay where they
    * are, so the "next question" index keeps pointing at the right line.
    */
+  const isAsked = (q: string) => askedRef.current.has(q.toLowerCase());
+
   async function refreshQuestions(): Promise<void> {
     const before = splitQuestions(questionsRef.current);
-    const askedCount = Math.min(questionIndexRef.current, before.length);
     setClaudeStatus("updating…");
     const id = ++llmSeq.current;
     setLlmCalls((calls) => [...calls, { id, at: Date.now(), status: "pending" }]);
     const result = await fetchQuestionChanges({
-      context: instructionsRef.current,
-      asked: before.slice(0, askedCount),
-      remaining: before.slice(askedCount),
+      context: goalRef.current,
+      asked: before.filter(isAsked),
+      remaining: before.filter((q) => !isAsked(q)),
       transcript: toPlainText(transcriptRef.current),
     });
     setLlmCalls((calls) => calls.map((c) => (c.id === id ? { ...c, ...result } : c)));
@@ -164,12 +179,9 @@ export default function App() {
     // Re-read the list: you may have edited it, or a question may have been
     // sent, while Claude was thinking.
     const now = splitQuestions(questionsRef.current);
-    const asked = now.slice(0, Math.min(questionIndexRef.current, now.length));
     const drop = new Set(remove.map((q) => q.trim().toLowerCase()));
-    const remaining = now
-      .slice(asked.length)
-      .filter((q) => !drop.has(q.toLowerCase()));
-    const updated = [...asked, ...remaining, ...add.map((q) => q.trim())].join("\n");
+    const kept = now.filter((q) => isAsked(q) || !drop.has(q.toLowerCase()));
+    const updated = [...kept, ...add.map((q) => q.trim())].join("\n");
     questionsRef.current = updated;
     setQuestions(updated);
     setClaudeStatus(`last update ${new Date().toLocaleTimeString(undefined, { hour12: false })}: +${add.length} −${remove.length}`);
@@ -182,18 +194,22 @@ export default function App() {
       tokenProvider: fetchToken,
       instructionsProvider: () => instructionsRef.current,
       speakFirst: true,
-      endsSession: (reply) => saidClosing(reply, closingRef.current),
+      endsSession: (reply) => saidLine(reply, closingRef.current),
       nextInstructions: () => {
-        const list = splitQuestions(questionsRef.current);
-        // The closing line counts as one more step after the last question.
-        const steps = closingRef.current.trim() ? [...list, closingRef.current.trim()] : list;
-        const i = questionIndexRef.current;
-        if (i >= steps.length) return null;
-        questionIndexRef.current = i + 1;
-        setQuestionIndex(i + 1);
+        const pending = splitQuestions(questionsRef.current).filter((q) => !isAsked(q));
         const close = closingRef.current.trim();
-        if (i === 0 && list.length > 0 && close) return firstQuestionInstructions(list[0], close);
-        return questionInstructions(steps[i]);
+        // First turn after the greeting: the model decides yes (ask) or no (closing).
+        if (!greetingAnsweredRef.current) {
+          greetingAnsweredRef.current = true;
+          if (pending.length > 0 && close) return firstQuestionInstructions(pending[0], close);
+        }
+        if (pending.length > 0) return questionInstructions(pending[0]);
+        // Every question has been said: the closing, once.
+        if (close && !closingSentRef.current) {
+          closingSentRef.current = true;
+          return questionInstructions(close);
+        }
+        return null;
       },
       onConnectionState: setConnection,
       onActivity: setActivity,
@@ -212,6 +228,13 @@ export default function App() {
         const next = transcriptReducer(transcriptRef.current, evt, Date.now());
         transcriptRef.current = next;
         setTranscript(next);
+        // Alexa finished a reply: mark every question she actually said as asked.
+        if (evt.type === SERVER.audioTranscriptDone && typeof evt.transcript === "string") {
+          for (const q of splitQuestions(questionsRef.current)) {
+            if (saidLine(evt.transcript, q)) askedRef.current.add(q.toLowerCase());
+          }
+          setAskedCount(askedRef.current.size);
+        }
         // Your words just arrived: let Claude revise the questions not yet asked.
         if (evt.type === SERVER.transcriptionCompleted) void refreshQuestions();
       },
@@ -225,8 +248,10 @@ export default function App() {
 
   const connect = useCallback(async () => {
     setCloseMessage(null);
-    questionIndexRef.current = 0;
-    setQuestionIndex(0);
+    askedRef.current = new Set();
+    setAskedCount(0);
+    greetingAnsweredRef.current = false;
+    closingSentRef.current = false;
     await clientRef.current!.connect();
   }, []);
 
@@ -269,11 +294,16 @@ export default function App() {
 
       <label className="field">
         <span>
-          Questions — one per line; after you stop speaking, the next one is sent in a new
-          session.update (sent so far: {questionIndex}). Claude Haiku 5.5 edits the ones not
-          yet asked after each of your turns — {claudeStatus}
+          Questions — one per line. After you stop speaking, the first one Alexa has not said
+          yet is sent in a new session.update (said so far: {askedCount}). Claude Haiku 5.5
+          edits the ones not yet said after each of your turns — {claudeStatus}
         </span>
         <textarea value={questions} onChange={(e) => setQuestions(e.target.value)} rows={4} />
+      </label>
+
+      <label className="field">
+        <span>Interview goal — sent to Claude as context</span>
+        <textarea value={goal} onChange={(e) => setGoal(e.target.value)} rows={3} />
       </label>
 
       <label className="field">

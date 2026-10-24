@@ -1,0 +1,62 @@
+name: OpenAI check (Research Plan)
+
+# Started by hand only (Actions → "OpenAI check (Research Plan)" → Run workflow).
+# Starts the real backend and sends POST /api/initial-questions exactly as the
+# dashboard's Research Plan does, with the Oakville thesis and a sample person,
+# using the OPENAI_API_KEY repository secret. The result is shown as
+# annotations on the run.
+on:
+  workflow_dispatch:
+
+jobs:
+  research-plan:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Key present
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then echo "::error::No OPENAI_API_KEY repository secret."; exit 1; fi
+      - name: Model and a tiny call (npm run check:openai)
+        run: |
+          npm run check:openai 2>&1 | tee check.txt || { tail -3 check.txt | while IFS= read -r l; do echo "::error::$l"; done; exit 1; }
+          grep -E "^model:|reply in" check.txt | while IFS= read -r l; do echo "::notice title=check::$l"; done
+      - name: Start the backend
+        run: |
+          npx tsx server/index.ts > server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:3000/api/health && break; sleep 1; done
+          curl -sf http://localhost:3000/api/health || { echo "::error::backend did not start"; cat server.log; exit 1; }
+      - name: POST /api/initial-questions (as the Research Plan does)
+        run: |
+          node -e '
+            const thesis = require("fs").readFileSync("frontend/src/lib/mock-data.ts","utf8").match(/export const OAKVILLE_THESIS = (".*?");\n/s)[1];
+            const body = {
+              company: "Oakville Lakeshore Animal Hospital",
+              thesis: JSON.parse(thesis),
+              person: { name: "Olivia Yan", title: "Custom contact", source: "Custom",
+                        description: "Dog owner in Oakville who has used the clinic for three years" },
+              hypotheses: [
+                { id: "h1", title: "Market Attractiveness", description: "We believe Oakville demand for high-quality veterinary services will grow." },
+                { id: "h2", title: "Competitive Positioning", description: "We believe customer relationships and reputation defend local share." },
+                { id: "h3", title: "Organic Revenue Growth", description: "We believe utilization, retention and new services grow revenue." }
+              ]
+            };
+            require("fs").writeFileSync("req.json", JSON.stringify(body));'
+          code=$(curl -s -o reply.json -w "%{http_code}" -X POST http://localhost:3000/api/initial-questions \
+                 -H "Content-Type: application/json" --data @req.json --max-time 300)
+          echo "HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::HTTP $code: $(jq -r '.error // empty' reply.json | head -c 900)"
+            tail -20 server.log
+            exit 1
+          fi
+          echo "::notice title=model::$(jq -r '.prompt.model' reply.json) in $(jq -r '.ms' reply.json) ms"
+          echo "::notice title=audience::$(jq -r '.audience' reply.json) — $(jq -r '.objectives' reply.json | head -c 400)"
+          jq -r '.questions[]' reply.json | while IFS= read -r q; do echo "::notice title=question::$q"; done

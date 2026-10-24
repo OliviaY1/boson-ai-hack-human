@@ -48,10 +48,18 @@ const QUESTION_MODEL = "claude-haiku-5-5";
 
 const QUESTION_SYSTEM =
   "You are an expert consumer-research interviewer for a private equity firm, updating the " +
-  "question list of a live voice interview. Follow up on what the person just said: remove " +
-  "remaining questions that are answered or no longer fit them, and add up to 2 short " +
-  "follow-ups (under 12 words) that serve the interview goal. Reply only with JSON " +
+  "question list of a live phone interview that lasts only about one minute, so keep the list " +
+  "short. Follow up on what the person just said: remove remaining questions that are answered " +
+  "or no longer fit them, and add up to 2 short follow-ups (under 12 words) that serve the " +
+  "interview goal. Reply only with JSON " +
   '{"add":[],"remove":[]}, copying removed questions exactly.';
+
+const AUDIENCE_STYLE: Record<string, string> = {
+  customer:
+    "The interviewee is a customer: use everyday words, one simple idea per question, easy to answer in a few seconds.",
+  expert:
+    "The interviewee is an industry expert: questions can be analytical and use industry terms (market share, pricing power, channels, margins).",
+};
 
 /**
  * POST /api/questions  { context, asked: string[], remaining: string[], transcript }
@@ -63,13 +71,17 @@ app.post("/api/questions", async (req, res) => {
   if (!ANTHROPIC_API_KEY) {
     return res.status(500).json({ error: "No ANTHROPIC_API_KEY in .env." });
   }
-  const { context = "", asked = [], remaining = [], transcript = "" } = req.body ?? {};
+  const { context = "", audience = "customer", asked = [], remaining = [], transcript = "" } =
+    req.body ?? {};
   const list = (items: unknown) =>
     Array.isArray(items) && items.length ? items.map((q) => `- ${String(q)}`).join("\n") : "(none)";
   // The context goes into the system prompt, ahead of everything that changes
   // per call. The API keeps no state between calls, so it is still sent every
   // time; putting the unchanging part first is what prompt caching needs.
-  const system = context ? `${QUESTION_SYSTEM}\n\nInterview goal:\n${String(context)}` : QUESTION_SYSTEM;
+  const style = AUDIENCE_STYLE[String(audience)] ?? AUDIENCE_STYLE.customer;
+  const system = [QUESTION_SYSTEM, style, context ? `Interview goal:\n${String(context)}` : ""]
+    .filter(Boolean)
+    .join("\n\n");
   const userMessage = [
     `Already asked:\n${list(asked)}`,
     `Remaining, in order:\n${list(remaining)}`,

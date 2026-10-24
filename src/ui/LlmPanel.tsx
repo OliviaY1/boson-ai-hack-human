@@ -25,7 +25,7 @@ export function LlmPanel({ calls }: { calls: LlmCall[] }) {
         <p className="empty">No calls yet — one is made after each transcription of your speech.</p>
       ) : (
         <ol className="session-events">
-          {calls.map((c) => (
+          {[...calls].reverse().map((c) => (
             <li key={c.id} className="session-event">
               <div className="session-event-head">
                 <span className={c.status === "error" ? "dir-error" : "dir-send"}>

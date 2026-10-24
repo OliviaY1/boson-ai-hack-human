@@ -82,6 +82,7 @@ function splitQuestions(text: string): string[] {
  */
 async function fetchQuestionChanges(payload: {
   context: string;
+  audience: "customer" | "expert";
   asked: string[];
   remaining: string[];
   transcript: string;
@@ -150,6 +151,10 @@ export default function App() {
   const [addedAt, setAddedAt] = useState<Record<string, number>>({});
   const [removedQs, setRemovedQs] = useState<RemovedQuestion[]>([]);
   const [goal, setGoal] = useState(DEFAULT_GOAL);
+  // Who Alexa is talking to; Claude writes simpler questions for customers.
+  const [audience, setAudience] = useState<"customer" | "expert">("customer");
+  const audienceRef = useRef(audience);
+  audienceRef.current = audience;
   const goalRef = useRef(goal);
   goalRef.current = goal;
   const [closing, setClosing] = useState(DEFAULT_CLOSING);
@@ -170,6 +175,7 @@ export default function App() {
     setLlmCalls((calls) => [...calls, { id, at: Date.now(), status: "pending" }]);
     const result = await fetchQuestionChanges({
       context: goalRef.current,
+      audience: audienceRef.current,
       asked: before.filter(isAsked),
       remaining: before.filter((q) => !isAsked(q)),
       transcript: toPlainText(transcriptRef.current),
@@ -297,6 +303,8 @@ export default function App() {
         it found.
       </p>
 
+      <div className="layout">
+      <div className="layout-left">
       <SessionPanel
         instructions={instructions}
         onChange={setInstructions}
@@ -314,13 +322,13 @@ export default function App() {
         <textarea value={questions} onChange={(e) => setQuestions(e.target.value)} rows={4} />
       </label>
 
-      <QuestionList
-        questions={splitQuestions(questions)}
-        isSaid={isAsked}
-        addedAt={addedAt}
-        removed={removedQs}
-        updating={claudeStatus === "updating…"}
-      />
+      <label className="field">
+        <span>Interviewee — sent to Claude</span>
+        <select value={audience} onChange={(e) => setAudience(e.target.value as "customer" | "expert")}>
+          <option value="customer">Customer (e.g. someone who buys Nike)</option>
+          <option value="expert">Industry expert</option>
+        </select>
+      </label>
 
       <label className="field">
         <span>Interview goal — sent to Claude as context</span>
@@ -334,8 +342,6 @@ export default function App() {
         </span>
         <textarea value={closing} onChange={(e) => setClosing(e.target.value)} rows={2} />
       </label>
-
-      <LlmPanel calls={llmCalls} />
 
       <StatusBar connection={connection} activity={activity} closeMessage={closeMessage} />
 
@@ -382,6 +388,21 @@ export default function App() {
       </label>
 
       <DebugDrawer entries={log} />
+      </div>
+
+      {/* Right column: what Claude is doing to the questions, live. */}
+      <aside className="layout-right">
+        <QuestionList
+          questions={splitQuestions(questions)}
+          isSaid={isAsked}
+          addedAt={addedAt}
+          removed={removedQs}
+          updating={claudeStatus === "updating…"}
+        />
+
+        <LlmPanel calls={llmCalls} />
+      </aside>
+      </div>
     </main>
   );
 }

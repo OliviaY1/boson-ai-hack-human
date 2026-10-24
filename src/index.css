@@ -25,7 +25,7 @@ body {
 }
 
 .app {
-  max-width: 46rem;
+  max-width: 92rem;
   margin: 0 auto;
   padding: 3rem 1.5rem 6rem;
 }
@@ -255,6 +255,41 @@ input {
   color: var(--muted);
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   font-size: 0.8rem;
+}
+
+/* --- two columns: controls on the left, Claude on the right --- */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2rem;
+  align-items: start;
+}
+
+.layout-right {
+  position: sticky;
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+
+@media (max-width: 60rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .layout-right {
+    position: static;
+    max-height: none;
+  }
+}
+
+select {
+  font: inherit;
+  padding: 0.5rem 0.8rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
 }
 
 /* --- live question list --- */

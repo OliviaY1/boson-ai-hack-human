@@ -1,4 +1,5 @@
 import { uid } from "./mock-service";
+import { readBackendJson } from "./backend";
 import type { DiligenceProject, Expert, InvestmentHypothesis, PlanExpert, ResearchPlan } from "./types";
 
 /**
@@ -34,10 +35,10 @@ export async function fetchInitialQuestions(
       hypotheses: hypotheses.map((h) => ({ id: h.id, title: h.title, description: h.description })),
     }),
   });
-  const body = (await res.json()) as Partial<InitialQuestions> & {
+  const body = await readBackendJson<Partial<InitialQuestions> & {
     error?: string;
     prompt?: { model?: string };
-  };
+  }>(res);
   if (!res.ok || !body.questions?.length) throw new Error(body.error ?? `HTTP ${res.status}`);
   return {
     model: body.prompt?.model ?? "GPT-6",

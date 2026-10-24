@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { readBackendJson } from "./backend";
 import { allHypotheses, allInterviews, uid } from "./mock-service";
 import { interviewsPayload } from "./thesis-validation";
 import type {
@@ -73,7 +74,7 @@ async function requestNextRound(p: DiligenceProject): Promise<NextRoundProposal>
       })),
     }),
   });
-  const body = (await res.json()) as NextRoundResponse;
+  const body = await readBackendJson<NextRoundResponse>(res);
   if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
 
   // Hypotheses for the new round, with where each came from.

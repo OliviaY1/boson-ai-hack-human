@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { readBackendJson } from "./backend";
 import { allHypotheses, allInterviews } from "./mock-service";
 import type { DiligenceProject, ThesisValidationResult } from "./types";
 
@@ -69,9 +70,9 @@ async function requestValidation(p: DiligenceProject): Promise<ThesisValidationR
       interviews: interviewsPayload(p),
     }),
   });
-  const body = (await res.json()) as Omit<ThesisValidationResult, "at" | "inputKey" | "interviewCount"> & {
+  const body = await readBackendJson<Omit<ThesisValidationResult, "at" | "inputKey" | "interviewCount"> & {
     error?: string;
-  };
+  }>(res);
   if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
   return {
     at: new Date().toISOString(),

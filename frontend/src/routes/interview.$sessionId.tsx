@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { readBackendJson } from "@/lib/backend";
 import { Clock, Mic, PhoneOff, Play } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { CallController, type CallState } from "@higgs/call/CallController";
@@ -44,7 +45,7 @@ function IntervieweePage() {
   useEffect(() => {
     fetch(`/api/interviews/${sessionId}`)
       .then(async (res) => {
-        const body = (await res.json()) as Loaded & { error?: string };
+        const body = await readBackendJson<Loaded & { error?: string }>(res);
         if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
         setInfo(body);
         // Reopening a finished interview shows how it ended.

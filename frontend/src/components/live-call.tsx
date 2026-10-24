@@ -1,4 +1,5 @@
 import { Clock, ExternalLink, Mic, PhoneOff, Send, Sparkles } from "lucide-react";
+import { readBackendJson } from "@/lib/backend";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import type { CallConfig, CallState } from "@higgs/call/CallController";
 import type { Audience } from "@higgs/call/script";
@@ -177,7 +178,7 @@ export function useLiveCall(project: DiligenceProject, iv: Interview, setIv: Set
           display: { interviewerName: name, intervieweeName: person?.name ?? "", company: project.company },
         }),
       });
-      const body = (await res.json()) as { id?: string; error?: string };
+      const body = await readBackendJson<{ id?: string; error?: string }>(res);
       if (!res.ok || !body.id) throw new Error(body.error ?? `HTTP ${res.status}`);
       const id = body.id;
       latest.current = null;
@@ -370,7 +371,7 @@ export function useSyncSessions(
         try {
           const res = await fetch(`/api/interviews/${sessionId}`);
           if (!res.ok) continue;
-          const s = (await res.json()) as InterviewSnapshot;
+          const s = await readBackendJson<InterviewSnapshot>(res);
           const st = s.state;
           if (!stop && st && (st.phase === "ended" || st.transcript.length)) setIv(ivId, (i) => mirror(i, st));
         } catch {

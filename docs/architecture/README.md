@@ -18,6 +18,8 @@ The recheck reviewed the five application commits since the original `9a82ca0` s
 
 ## Reusable diagrams
 
+Open [the interactive chart gallery](gallery.html) to browse all eight diagrams with zoom controls and links to the SVG exports and Mermaid sources. After cloning the repository, open `docs/architecture/gallery.html` directly in a browser. It uses relative files and requires no server, build step or external dependencies. GitHub's file view displays HTML source; download/clone the folder to use the gallery locally.
+
 The Markdown pages include Mermaid code blocks that GitHub can render. Each diagram also has an editable standalone `.mmd` source and an SVG export for slides, documents and other tools.
 
 | Diagram | Editable source | Export |

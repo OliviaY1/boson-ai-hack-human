@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diligence Live — Architecture charts</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;color:#202936;background:#f4f6f8}
+header{padding:18px 26px;background:#fff;border-bottom:1px solid #dde2e8;display:flex;align-items:center;justify-content:space-between;gap:20px}
+h1{font-size:21px;margin:0}header p{font-size:13px;color:#617083;margin:3px 0 0}.badge{font-size:12px;border:1px solid #dde2e8;border-radius:20px;padding:5px 12px;white-space:nowrap}
+main{display:grid;grid-template-columns:250px minmax(0,1fr);height:calc(100vh - 90px)}
+nav{padding:22px 14px;border-right:1px solid #dde2e8;background:#fff;overflow:auto}nav p{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#778497;margin:0 12px 12px}
+button,a{font:inherit}button{cursor:pointer}nav button{display:block;text-align:left;width:100%;background:none;border:0;border-radius:7px;padding:12px;margin:3px 0;color:#445469}
+nav button[aria-current=true]{background:#e8edf5;color:#172c4c;font-weight:600}nav button:hover{background:#f0f3f7}
+.workspace{display:flex;flex-direction:column;min-width:0;min-height:0;padding:20px;gap:14px}.toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.toolbar h2{font-size:17px;margin:0 auto 0 0}
+.toolbar button,.toolbar a{background:#fff;border:1px solid #d1d9e2;padding:6px 11px;border-radius:6px;color:#283e59;text-decoration:none;font-size:13px}.toolbar button:hover,.toolbar a:hover{background:#eaf0f7}
+#zoom{font-size:12px;color:#617083;min-width:40px;text-align:center}.viewport{flex:1;min-height:300px;overflow:auto;background:white;border:1px solid #dde2e8;border-radius:9px;padding:24px}
+#diagram{display:block;max-width:none}.help{font-size:12px;color:#617083;margin:0}
+@media(max-width:800px){main{grid-template-columns:1fr;height:auto}nav{display:flex;gap:5px;overflow:auto;padding:10px;border-right:0}nav p{display:none}nav button{width:auto;white-space:nowrap;padding:8px 12px}.viewport{height:70vh;flex:none}.workspace{padding:12px}header{padding:14px}.badge{display:none}}
+</style></head><body>
+<header><div><h1>Diligence Live · Architecture charts</h1><p>Eight diagrams · Application snapshot f212a70 · Interactive gallery</p></div><span class="badge">Mermaid sources + SVG exports</span></header>
+<main><nav aria-label="Architecture charts"><p>Choose a chart</p></nav><section class="workspace">
+<div class="toolbar"><h2 id="title"></h2><button id="fit">Fit width</button><button id="out" aria-label="Zoom out">−</button><span id="zoom"></span><button id="in" aria-label="Zoom in">+</button><button id="actual">100%</button><a id="full" target="_blank" rel="noopener">Open SVG</a><a id="source" download>Mermaid source</a></div>
+<div class="viewport"><img id="diagram" alt=""></div><p class="help">Choose a chart on the left. Zoom in to inspect labels, then scroll inside the canvas. Open SVG for the standalone export.</p>
+</section></main>
+<script>
+const charts=[{"id": "01-tech-stack", "title": "Technology stack", "width": 1953.46875, "height": 787.75}, {"id": "02-system-architecture", "title": "System architecture", "width": 2791.7109375, "height": 795.0}, {"id": "03-interview-sequence", "title": "Interview sequence", "width": 1483.0, "height": 3482.0}, {"id": "04-audio-and-adaptation", "title": "Audio and adaptive questions", "width": 4045.3515625, "height": 604.94287109375}, {"id": "05-research-data-flow", "title": "Research data flow", "width": 2723.2890625, "height": 709.1666870117188}, {"id": "06-domain-model", "title": "Domain model", "width": 1529.7171630859375, "height": 2222.25}, {"id": "07-runtime-topology", "title": "Runtime topology", "width": 1064.73974609375, "height": 1460.0}, {"id": "08-data-ownership", "title": "Data ownership", "width": 2002.53515625, "height": 769.0}];
+const nav=document.querySelector('nav'),image=document.querySelector('#diagram'),viewport=document.querySelector('.viewport');
+let selected=charts[0],scale=1,fitMode=true;
+function setZoom(value){scale=Math.max(.1,Math.min(2,value));image.style.width=Math.round(selected.width*scale)+'px';document.querySelector('#zoom').textContent=Math.round(scale*100)+'%';}
+function fit(){fitMode=true;setZoom(Math.min(1,(viewport.clientWidth-50)/selected.width));}
+function select(chart){selected=chart;document.querySelector('#title').textContent=chart.title;image.src='diagrams/'+chart.id+'.svg';image.alt=chart.title;document.querySelector('#full').href=image.src;document.querySelector('#source').href='diagrams/'+chart.id+'.mmd';nav.querySelectorAll('button').forEach(b=>b.setAttribute('aria-current',String(b.dataset.id===chart.id)));viewport.scrollTo(0,0);fit();}
+for(const chart of charts){const button=document.createElement('button');button.textContent=chart.id.slice(0,2)+'  '+chart.title;button.dataset.id=chart.id;button.onclick=()=>select(chart);nav.append(button);}
+document.querySelector('#fit').onclick=fit;document.querySelector('#actual').onclick=()=>{fitMode=false;setZoom(1)};document.querySelector('#in').onclick=()=>{fitMode=false;setZoom(scale+.15)};document.querySelector('#out').onclick=()=>{fitMode=false;setZoom(scale-.15)};
+window.addEventListener('resize',()=>{if(fitMode)fit()});select(selected);
+</script></body></html>

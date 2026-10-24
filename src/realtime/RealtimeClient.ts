@@ -50,6 +50,18 @@ export interface RealtimeCallbacks {
    * Empty or absent means the tutorial's SYSTEM_PROMPT.
    */
   instructionsProvider?: () => string;
+  /**
+   * When true, Higgs speaks first: once per connection, as soon as the session
+   * is acknowledged (session.created) and the microphone is on, the client
+   * sends a bare response.create — no user turn needed.
+   */
+  speakFirst?: boolean;
+  /**
+   * Called on every input_audio_buffer.speech_stopped (you finished a turn).
+   * Return new instructions to send them in a session.update right away, or
+   * null to send nothing.
+   */
+  nextInstructions?: () => string | null;
 }
 
 let logSeq = 0;
@@ -107,6 +119,11 @@ export class RealtimeClient {
    */
   private connecting = false;
 
+  /** session.created has arrived on this connection. */
+  private sessionReady = false;
+  /** The speak-first response.create has been sent on this connection. */
+  private spokeFirst = false;
+
   constructor(callbacks: RealtimeCallbacks) {
     this.cb = callbacks;
     this.player = new RingPlayer((speaking) => {
@@ -132,6 +149,7 @@ export class RealtimeClient {
     this.cb.onMicChange?.(true);
     this.setActivity("listening");
     this.info("Microphone started.");
+    this.maybeSpeakFirst();
   }
 
   async stopMic(): Promise<void> {
@@ -149,6 +167,8 @@ export class RealtimeClient {
       return;
     }
     this.connecting = true;
+    this.sessionReady = false;
+    this.spokeFirst = false;
     this.setState("connecting");
 
     // Must happen inside the user gesture that triggered this call, or the
@@ -185,6 +205,7 @@ export class RealtimeClient {
     ws.onclose = (ev) => {
       this.connecting = false;
       this.ws = null;
+      this.sessionReady = false;
       const info = describeClose(ev.code, ev.reason);
       this.log("info", `close:${ev.code}`, info);
       this.setState("closed");
@@ -278,8 +299,17 @@ export class RealtimeClient {
         void this.handleBargeIn();
         break;
 
-      case SERVER.speechStopped:
+      case SERVER.speechStopped: {
         this.setActivity("thinking");
+        // You finished a turn: send the next instructions, if there are any.
+        const next = this.cb.nextInstructions?.();
+        if (next) this.send(buildSessionConfig(next));
+        break;
+      }
+
+      case SERVER.sessionCreated:
+        this.sessionReady = true;
+        this.maybeSpeakFirst();
         break;
 
       case SERVER.outputItemAdded: {
@@ -313,6 +343,15 @@ export class RealtimeClient {
         // handle. They are already logged. Never throw here.
         break;
     }
+  }
+
+  /** Higgs speaks first: one bare response.create per connection. */
+  private maybeSpeakFirst(): void {
+    if (!this.cb.speakFirst || this.spokeFirst || !this.sessionReady || !this.capture.active) return;
+    this.spokeFirst = true;
+    this.info("Speaking first: response.create with no user turn.");
+    this.send(responseCreate());
+    this.setActivity("thinking");
   }
 
   // --- the tool loop ---------------------------------------------------------

@@ -7,6 +7,7 @@ import {
 } from "./realtime/RealtimeClient";
 import {
   emptyTranscript,
+  toPlainText,
   transcriptReducer,
   type TranscriptState,
 } from "./state/transcriptStore";
@@ -16,23 +17,26 @@ import { SessionPanel } from "./ui/SessionPanel";
 import { VoiceEventsPanel } from "./ui/VoiceEventsPanel";
 import { SpeechTimeline } from "./ui/SpeechTimeline";
 import { StatusBar } from "./ui/StatusBar";
-import { TranscriptPanel } from "./ui/TranscriptPanel";
 
 /**
  * The default for the System instructions box. Higgs only replies after you
  * speak (server VAD starts each response), so the script is written as
  * replies to your turns.
  */
-const DEFAULT_INSTRUCTIONS = `You are Alexa, a market researcher at a private equity firm, running a one-minute survey about Nike.
+const DEFAULT_INSTRUCTIONS = `You are Alexa from a private equity firm. Say exactly: "Hi, I'm Alexa from a private equity firm. Do you have one minute for a few quick questions about Nike?" Nothing else.`;
 
-Say each line below word for word, one per turn, then wait for the answer. Never say "Hello! How can I assist you today?" Add nothing else.
+/** One per line. Each is sent in its own session.update after you finish a turn. */
+const DEFAULT_QUESTIONS = [
+  "Which sports brand do you buy most?",
+  "Why that brand?",
+  "Are you buying more Nike this year, or less?",
+  "That's all. Thank you!",
+].join("\n");
 
-1. "Hi, I'm Alexa from a private equity firm. Do you have one minute for a few quick questions about Nike?"
-   - If they say no: "No problem, thanks. Bye!"
-2. "Which sports brand do you buy most?"
-3. "Why that brand?"
-4. "Are you buying more Nike this year, or less?"
-5. "That's all. Thank you!"`;
+/** The short instructions sent for each question. */
+function questionInstructions(question: string): string {
+  return `You are Alexa, a market researcher. Say exactly: "${question}" Nothing else.`;
+}
 
 /** Ask our own server for a fresh ephemeral key. One per connection. */
 async function fetchToken(): Promise<string> {
@@ -58,6 +62,13 @@ export default function App() {
   const [instructions, setInstructions] = useState(DEFAULT_INSTRUCTIONS);
   const instructionsRef = useRef(instructions);
   instructionsRef.current = instructions;
+  // QUESTIONS: after each of your turns (speech_stopped), the next one is sent
+  // in its own session.update. The index resets on every Connect.
+  const [questions, setQuestions] = useState(DEFAULT_QUESTIONS);
+  const questionsRef = useRef(questions);
+  questionsRef.current = questions;
+  const questionIndexRef = useRef(0);
+  const [questionIndex, setQuestionIndex] = useState(0);
 
   // The client outlives re-renders, so it lives in a ref rather than state.
   const clientRef = useRef<RealtimeClient | null>(null);
@@ -65,6 +76,18 @@ export default function App() {
     clientRef.current = new RealtimeClient({
       tokenProvider: fetchToken,
       instructionsProvider: () => instructionsRef.current,
+      speakFirst: true,
+      nextInstructions: () => {
+        const list = questionsRef.current
+          .split("\n")
+          .map((q) => q.trim())
+          .filter(Boolean);
+        const i = questionIndexRef.current;
+        if (i >= list.length) return null;
+        questionIndexRef.current = i + 1;
+        setQuestionIndex(i + 1);
+        return questionInstructions(list[i]);
+      },
       onConnectionState: setConnection,
       onActivity: setActivity,
       onLog: (entry) => setLog((l) => [...l, entry]),
@@ -91,6 +114,8 @@ export default function App() {
 
   const connect = useCallback(async () => {
     setCloseMessage(null);
+    questionIndexRef.current = 0;
+    setQuestionIndex(0);
     await clientRef.current!.connect();
   }, []);
 
@@ -131,6 +156,14 @@ export default function App() {
         entries={log}
       />
 
+      <label className="field">
+        <span>
+          Questions — one per line; after you stop speaking, the next one is sent in a new
+          session.update (sent so far: {questionIndex})
+        </span>
+        <textarea value={questions} onChange={(e) => setQuestions(e.target.value)} rows={4} />
+      </label>
+
       <StatusBar connection={connection} activity={activity} closeMessage={closeMessage} />
 
       <div className="row">
@@ -170,7 +203,10 @@ export default function App() {
 
       <VoiceEventsPanel entries={log} />
 
-      <TranscriptPanel state={transcript} />
+      <label className="field">
+        <span>Current transcript</span>
+        <textarea readOnly value={toPlainText(transcript)} rows={10} />
+      </label>
 
       <DebugDrawer entries={log} />
     </main>

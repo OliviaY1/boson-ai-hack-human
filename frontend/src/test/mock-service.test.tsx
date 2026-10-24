@@ -54,7 +54,8 @@ describe("research rounds", () => {
     expect(interviews.flatMap((iv) => iv.findings)).toHaveLength(0);
     const done = { ...project, plan, interviews };
     const results = generateMockFindings(done);
-    expect(results.findings).toHaveLength(8);
+    // Harbor has one AlphaSights expert (Priya Raman) since the directory was cut to four.
+    expect(results.findings).toHaveLength(4);
     expect(results.findings.every((f) => f.sentiment === "neutral")).toBe(true);
     expect(results.validation.every((v) => v.assessment === "Insufficient Evidence")).toBe(true);
     for (const finding of results.findings) {

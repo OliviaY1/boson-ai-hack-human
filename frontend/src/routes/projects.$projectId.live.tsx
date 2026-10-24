@@ -9,7 +9,7 @@ import {
   Square,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   expertOf,
   FindingItem,
@@ -18,7 +18,7 @@ import {
   TranscriptViewer,
 } from "@/components/research";
 import { InterviewStatusBadge } from "@/components/status";
-import { LiveCallBar, useLiveCall } from "@/components/live-call";
+import { LiveCallBar, useLiveCall, useSyncSessions } from "@/components/live-call";
 import {
   Badge,
   Button,
@@ -59,6 +59,13 @@ function LivePage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const { project, update } = useProject(projectId);
   const { picked, select } = useRoundView();
+  // Pick up live calls that finished while their sheet was closed.
+  const syncIv = useCallback(
+    (id: string, fn: (iv: Interview) => Interview) =>
+      update((p) => ({ ...p, interviews: p.interviews.map((i) => (i.id === id ? fn(i) : i)) })),
+    [update],
+  );
+  useSyncSessions(project, syncIv);
   if (!project) return null;
 
   const rounds = roundsOf(project);

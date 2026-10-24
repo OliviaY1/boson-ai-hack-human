@@ -88,8 +88,9 @@ export async function resolveModel(apiKey: string): Promise<string> {
   const text = await res.text();
   if (!res.ok) throw new Error(`OpenAI /models ${res.status}: ${text}`);
   const ids = ((JSON.parse(text) as { data?: Array<{ id: string }> }).data ?? []).map((m) => m.id);
-  const pick =
-    PREFERRED.find((p) => ids.includes(p)) ?? ids.filter((id) => id.startsWith("gpt-6")).sort()[0];
+  // Text chat models only: skip audio, realtime, speech, image and search variants.
+  const chat = ids.filter((id) => id.startsWith("gpt-6") && !/audio|realtime|tts|transcribe|image|search/.test(id));
+  const pick = PREFERRED.find((p) => ids.includes(p)) ?? chat.sort()[0];
   if (!pick) {
     throw new Error(
       `No GPT-6 model is available to this key. Set OPENAI_MODEL in .env. Models seen: ${ids

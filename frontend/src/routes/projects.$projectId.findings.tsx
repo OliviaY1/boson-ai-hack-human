@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, Compass, FileText, Loader2, RefreshCw } from "lucide-react";
 import { expertOf } from "@/components/research";
 import { AssessmentBadge } from "@/components/status";
@@ -13,9 +13,10 @@ import {
 } from "@/lib/mock-service";
 import { useProject } from "@/lib/store";
 import { useRoundView } from "@/lib/round-view";
-import type { DiligenceProject, Finding } from "@/lib/types";
+import type { DiligenceProject, Finding, Interview } from "@/lib/types";
 import { useThesisValidation } from "@/lib/thesis-validation";
 import { startNextRoundFrom, useNextRound } from "@/lib/next-round";
+import { useSyncSessions } from "@/components/live-call";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/projects/$projectId/findings")({
@@ -50,6 +51,13 @@ function FindingsPage() {
   const { project, update } = useProject(projectId);
   const navigate = useNavigate();
   const { clear: clearRound } = useRoundView();
+  // Pick up live calls that finished while their sheet was closed.
+  const syncIv = useCallback(
+    (id: string, fn: (iv: Interview) => Interview) =>
+      update((p) => ({ ...p, interviews: p.interviews.map((i) => (i.id === id ? fn(i) : i)) })),
+    [update],
+  );
+  useSyncSessions(project, syncIv);
   if (!project) return null;
   const r = generateMockFindings(project);
   // Opening Findings means the consultant is done; one finished interview is enough.

@@ -294,7 +294,8 @@ export function generateMockResearchPlan(input: DiligenceProject): ResearchPlan 
   const hypotheses = fromThesis.length ? fromThesis : template;
   return {
     hypotheses,
-    experts: project.experts.slice(0, 3).map((e, i) => ({
+    // Everyone the consultant selected (custom contacts always are) is in the plan.
+    experts: project.experts.map((e, i) => ({
       expertId: e.id,
       reason: `${e.title || "Expert"} with relevant perspective on ${c}.`,
       hypothesisIds: fromThesis.length

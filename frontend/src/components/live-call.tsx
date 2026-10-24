@@ -70,7 +70,7 @@ function goalFor(project: DiligenceProject, iv: Interview): string {
 }
 
 /** The call's state, written into the interview the dashboard already renders. */
-function mirror(iv: Interview, st: CallState): Interview {
+export function mirror(iv: Interview, st: CallState): Interview {
   const questions = st.questions.map((q): InterviewQuestion => {
     const out: InterviewQuestion = {
       id: q.id,
@@ -344,4 +344,45 @@ export function AvatarView({
       </div>
     </div>
   );
+}
+
+/**
+ * Keep interviews with a live session up to date even when their sheet is not
+ * open: the backend has each call's latest state, so the Live Research and
+ * Findings pages read it (every few seconds while a call is unfinished) and
+ * mirror it in — a call that ended while the sheet was closed still counts.
+ */
+export function useSyncSessions(
+  project: DiligenceProject | undefined,
+  setIv: (id: string, fn: (iv: Interview) => Interview) => void,
+) {
+  const pending = (project?.interviews ?? [])
+    .filter((iv) => iv.sessionId && iv.status !== "Completed")
+    .map((iv) => `${iv.id}:${iv.sessionId}`)
+    .join(",");
+  useEffect(() => {
+    if (!pending) return;
+    let stop = false;
+    const sync = async () => {
+      for (const pair of pending.split(",")) {
+        const [ivId, sessionId] = pair.split(":");
+        if (!ivId || !sessionId) continue;
+        try {
+          const res = await fetch(`/api/interviews/${sessionId}`);
+          if (!res.ok) continue;
+          const s = (await res.json()) as InterviewSnapshot;
+          const st = s.state;
+          if (!stop && st && (st.phase === "ended" || st.transcript.length)) setIv(ivId, (i) => mirror(i, st));
+        } catch {
+          /* backend not reachable right now; try again on the next tick */
+        }
+      }
+    };
+    void sync();
+    const t = setInterval(() => void sync(), 4000);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, [pending, setIv]);
 }

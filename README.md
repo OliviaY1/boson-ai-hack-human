@@ -89,7 +89,7 @@ what to do when something does not work.
 ## Other commands
 
 ```bash
-npm test          # 31 unit tests
+npm test          # 41 unit tests
 npm run typecheck # TypeScript, no emit
 npm run build     # production build
 npm run probe     # open a real session headlessly and print every event

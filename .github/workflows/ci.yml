@@ -3,8 +3,8 @@ name: CI
 # `test` runs the unit tests, the typecheck and the production build on every
 # push and pull request.
 #
-# `live` talks to the real Higgs Realtime API with the BOSON_API_KEY repository
-# secret, using the headless probe (tools/probe.ts) — no browser, no
+# `live` talks to the real Higgs Realtime API with your Boson API key
+# repository secret, using the headless probe (tools/probe.ts) — no browser, no
 # microphone. It runs when started by hand (Actions → CI → Run workflow) or on a
 # push whose commit message contains "[live]", and it is skipped with a warning
 # when no key secret is set.
@@ -32,7 +32,6 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[live]')
     runs-on: ubuntu-latest
     env:
-      BOSON_API_KEY: ${{ secrets.BOSON_API_KEY || secrets.BOSON_AI_API_KEY || secrets.BOSONAI_API_KEY }}
       SHORT_SCRIPT: "What's your name?"
       # Long enough (~35 s of speech) that the reply is still being generated
       # when the probe starts talking over it.
@@ -53,15 +52,27 @@ jobs:
           cache: npm
       - run: npm ci
 
-      - name: Check for an API key
+      # Uses BOSON_API_KEY if that secret exists, otherwise the first repository
+      # secret whose name mentions BOSON or HIGGS. Only the secret's NAME is
+      # ever printed.
+      - name: Find the API key secret
         id: key
+        env:
+          ALL_SECRETS: ${{ toJSON(secrets) }}
         run: |
-          if [ -z "$BOSON_API_KEY" ]; then
-            echo "::warning::No BOSON_API_KEY secret is set, so the live test was skipped."
+          name=$(jq -r 'if has("BOSON_API_KEY") then "BOSON_API_KEY"
+                        else ([keys[] | select(test("BOSON|HIGGS"; "i"))][0] // "") end' <<<"$ALL_SECRETS")
+          if [ -z "$name" ]; then
+            names=$(jq -r '[keys[] | select(. != "github_token")] | join(", ")' <<<"$ALL_SECRETS")
+            echo "::warning::No Boson API key secret found (repository secrets visible to this job: ${names:-none}). Live test skipped."
             echo "present=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          value=$(jq -r --arg n "$name" '.[$n]' <<<"$ALL_SECRETS")
+          echo "::add-mask::$value"
+          echo "BOSON_API_KEY=$value" >> "$GITHUB_ENV"
+          echo "::notice::Using the $name secret for the live test."
+          echo "present=true" >> "$GITHUB_OUTPUT"
 
       - name: Speak the script, then answer it by voice
         if: steps.key.outputs.present == 'true'

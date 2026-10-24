@@ -89,14 +89,18 @@ function IntervieweePage() {
     return () => es.close();
   }, [sessionId]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Closing or reloading the tab ends the call, which releases the avatar's
+    // slot (AvatarLink sends the stop with keepalive, so it survives the unload).
+    const onHide = () => void ctrl.current?.stop();
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
       const c = ctrl.current;
       ctrl.current = null;
       if (c) void c.stop().then(() => c.dispose());
-    },
-    [],
-  );
+    };
+  }, []);
 
   const start = useCallback(async () => {
     if (!info) return;

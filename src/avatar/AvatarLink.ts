@@ -316,13 +316,16 @@ export class AvatarLink {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
+    // End the Boson session first: when the tab is closing, only requests sent
+    // right away (keepalive) are guaranteed to go out.
+    const stopped = stopSession(this.sessionId);
     this.generation++;
     for (const resolve of this.clearWaiters.splice(0)) resolve(null);
     await this.writer?.close().catch(() => undefined);
     this.writer = null;
     await this.room.disconnect().catch(() => undefined);
     for (const el of this.elements.splice(0)) el.remove();
-    await stopSession(this.sessionId);
+    await stopped;
     this.cb.onLog?.(`avatar session ${this.sessionId} ended`);
   }
 }

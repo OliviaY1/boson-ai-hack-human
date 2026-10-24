@@ -142,26 +142,48 @@ export async function startAvatar(opts: {
     },
   });
 
-  const res = await fetch(`${boson.baseUrl}/v1/avatar/sessions`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${boson.apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      avatar_id: avatarId,
-      transport: {
-        type: "livekit",
-        url: livekit.url,
-        room_name: roomName,
-        participant_token: avatarToken,
-        participant_identity: AVATAR_IDENTITY,
-        publisher_identity: PUBLISHER_IDENTITY,
-      },
-      max_duration_seconds: maxDurationSeconds,
-    }),
+  const body = JSON.stringify({
+    avatar_id: avatarId,
+    transport: {
+      type: "livekit",
+      url: livekit.url,
+      room_name: roomName,
+      participant_token: avatarToken,
+      participant_identity: AVATAR_IDENTITY,
+      publisher_identity: PUBLISHER_IDENTITY,
+    },
+    max_duration_seconds: maxDurationSeconds,
   });
-  const text = await res.text();
-  if (!res.ok) {
-    // 429 capacity_exhausted / rate_limit_error and 503 come with Retry-After.
-    throw new HttpError(res.status, `Avatar session ${res.status}: ${text}`, res.headers.get("retry-after"));
+
+  // No free slot (429 capacity_exhausted / rate_limit_error) or a transient 503:
+  // Boson says how long to wait in Retry-After. Try again a few times before
+  // giving up (the call then continues voice only). insufficient_quota is a
+  // billing problem, so it is not retried.
+  const MAX_ATTEMPTS = 4;
+  let res: Response | null = null;
+  let text = "";
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    res = await fetch(`${boson.baseUrl}/v1/avatar/sessions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${boson.apiKey}`, "Content-Type": "application/json" },
+      body,
+    });
+    text = await res.text();
+    const retryable =
+      (res.status === 429 && !text.includes("insufficient_quota")) || res.status === 503;
+    if (res.ok || !retryable || attempt === MAX_ATTEMPTS) break;
+    const after = Number(res.headers.get("retry-after"));
+    const waitS = Math.min(Number.isFinite(after) && after > 0 ? after : 3, 10);
+    console.warn(`avatar: no free slot (HTTP ${res.status}); retrying in ${waitS}s (${attempt}/${MAX_ATTEMPTS - 1})`);
+    await new Promise((r) => setTimeout(r, waitS * 1000));
+  }
+  if (!res || !res.ok) {
+    const status = res?.status ?? 502;
+    throw new HttpError(
+      status,
+      `Avatar session ${status} after ${MAX_ATTEMPTS} tries: ${text}`,
+      res?.headers.get("retry-after"),
+    );
   }
   const session = JSON.parse(text) as { id: string; expires_at?: unknown };
   return {

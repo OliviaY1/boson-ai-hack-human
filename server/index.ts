@@ -288,7 +288,32 @@ app.post("/api/initial-questions", async (req, res) => {
 // --- Higgs Avatar ---------------------------------------------------------------
 
 const DEFAULT_AVATAR_ID = "builtin_claire_v1";
-const AVATAR_MAX_DURATION_SECONDS = 600;
+// Interviews take about a minute; a short cap means a session left behind by a
+// crashed or closed tab frees its avatar slot quickly.
+const AVATAR_MAX_DURATION_SECONDS = 180;
+
+/** Avatar sessions this server started and has not ended, released on shutdown. */
+const activeAvatarSessions = new Set<string>();
+
+async function releaseAvatars(): Promise<void> {
+  if (!BOSON_API_KEY || !activeAvatarSessions.size) return;
+  const ids = [...activeAvatarSessions];
+  activeAvatarSessions.clear();
+  await Promise.all(
+    ids.map((id) =>
+      stopAvatar({ baseUrl: BOSON_BASE_URL, apiKey: BOSON_API_KEY! }, id)
+        .then(() => console.log(`avatar session ${id} released on shutdown`))
+        .catch(() => undefined),
+    ),
+  );
+}
+
+// A restart (tsx watch after a pull) or Ctrl+C must not leave avatars holding slots.
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => {
+    void releaseAvatars().finally(() => process.exit(0));
+  });
+}
 
 /**
  * POST /api/avatar/start  { avatarId? }
@@ -314,6 +339,7 @@ app.post("/api/avatar/start", async (req, res) => {
       avatarId,
       maxDurationSeconds: AVATAR_MAX_DURATION_SECONDS,
     });
+    activeAvatarSessions.add(result.sessionId);
     console.log(`avatar session ${result.sessionId} started in room ${result.roomName}`);
     return res.json(result);
   } catch (err) {
@@ -331,6 +357,7 @@ app.post("/api/avatar/stop", async (req, res) => {
   const sessionId = String(req.body?.sessionId ?? "");
   if (!BOSON_API_KEY || !sessionId) return res.status(400).json({ error: "sessionId required" });
   try {
+    activeAvatarSessions.delete(sessionId);
     const session = await stopAvatar({ baseUrl: BOSON_BASE_URL, apiKey: BOSON_API_KEY }, sessionId);
     console.log(`avatar session ${sessionId} released`);
     return res.json({ ok: true, session });

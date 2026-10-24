@@ -56,6 +56,11 @@ export interface RealtimeCallbacks {
    * empty string means no script — the session behaves like the plain tutorial.
    */
   scriptProvider?: () => string;
+  /**
+   * The system instructions for the first session.update on each connection.
+   * Empty or absent means the tutorial's SYSTEM_PROMPT.
+   */
+  instructionsProvider?: () => string;
 }
 
 let logSeq = 0;
@@ -202,7 +207,8 @@ export class RealtimeClient {
       this.connecting = false;
       this.setState("open");
       this.info("Socket open — sending session.update.");
-      this.send(buildSessionConfig());
+      const instructions = this.cb.instructionsProvider?.().trim();
+      this.send(instructions ? buildSessionConfig(instructions) : buildSessionConfig());
     };
     ws.onmessage = (ev) => this.onMessage(ev);
     ws.onerror = () => this.info("WebSocket error — the close code below has the detail.");
@@ -238,6 +244,19 @@ export class RealtimeClient {
     // Adding the message does not start a turn. This does.
     this.send(responseCreate());
     this.setActivity("thinking");
+  }
+
+  /**
+   * Change the system instructions mid-session. Sends the full session config
+   * again with the new instructions; the server answers with session.updated.
+   */
+  updateInstructions(instructions: string): void {
+    if (this.state !== "open") {
+      this.info("updateInstructions ignored — the socket is not open.");
+      return;
+    }
+    const text = instructions.trim();
+    this.send(text ? buildSessionConfig(text) : buildSessionConfig());
   }
 
   send(evt: ClientEvent): void {

@@ -71,6 +71,65 @@ input {
   min-width: 0;
 }
 
+/* --- session instructions --- */
+
+.session {
+  margin-bottom: 1.2rem;
+}
+
+.session-events {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.session-event {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  font-size: 0.85rem;
+}
+
+.session-event-head {
+  padding: 0.45rem 0.7rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.session-event summary {
+  cursor: pointer;
+  padding: 0.35rem 0.7rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.session-event .dir-send {
+  color: var(--accent);
+}
+
+.session-event .dir-recv {
+  color: var(--ok);
+}
+
+.session-event .time {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.session-event pre {
+  margin: 0;
+  padding: 0.6rem 0.7rem;
+  border-top: 1px solid var(--border);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 20rem;
+  overflow: auto;
+}
+
 /* --- script box --- */
 
 .script {

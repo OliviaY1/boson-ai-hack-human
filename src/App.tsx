@@ -12,6 +12,8 @@ import {
 } from "./state/transcriptStore";
 import { DebugDrawer } from "./ui/DebugDrawer";
 import { MicButton } from "./ui/MicButton";
+import { SessionPanel } from "./ui/SessionPanel";
+import { SYSTEM_PROMPT } from "./realtime/sessionConfig";
 import { StatusBar } from "./ui/StatusBar";
 import { TranscriptPanel } from "./ui/TranscriptPanel";
 
@@ -38,6 +40,11 @@ export default function App() {
   const [script, setScript] = useState("What's your name?");
   const scriptRef = useRef(script);
   scriptRef.current = script;
+  // SYSTEM INSTRUCTIONS: sent in the first session.update on connect, and again
+  // whenever "Send session.update" is pressed.
+  const [instructions, setInstructions] = useState(SYSTEM_PROMPT);
+  const instructionsRef = useRef(instructions);
+  instructionsRef.current = instructions;
 
   // The client outlives re-renders, so it lives in a ref rather than state.
   const clientRef = useRef<RealtimeClient | null>(null);
@@ -45,6 +52,7 @@ export default function App() {
     clientRef.current = new RealtimeClient({
       tokenProvider: fetchToken,
       scriptProvider: () => scriptRef.current,
+      instructionsProvider: () => instructionsRef.current,
       onConnectionState: setConnection,
       onActivity: setActivity,
       onLog: (entry) => setLog((l) => [...l, entry]),
@@ -108,6 +116,14 @@ export default function App() {
           placeholder="What Higgs says first, once you connect and start the microphone…"
         />
       </label>
+
+      <SessionPanel
+        instructions={instructions}
+        onChange={setInstructions}
+        onSend={() => clientRef.current!.updateInstructions(instructions)}
+        canSend={isOpen}
+        entries={log}
+      />
 
       <StatusBar connection={connection} activity={activity} closeMessage={closeMessage} />
 

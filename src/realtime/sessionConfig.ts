@@ -54,12 +54,18 @@ export const SYSTEM_PROMPT = [
  */
 export const AUDIO_RATE = 24000;
 
-export function buildSessionConfig(): ClientEvent {
+/**
+ * `instructions` defaults to SYSTEM_PROMPT. The app passes whatever is in its
+ * "System instructions" box, and sends this again whenever that box is
+ * re-sent: `session.update` can be sent any number of times in one session,
+ * and each one is acknowledged with `session.updated`.
+ */
+export function buildSessionConfig(instructions: string = SYSTEM_PROMPT): ClientEvent {
   return {
     type: "session.update",
     session: {
       model: "higgs-realtime",
-      instructions: SYSTEM_PROMPT,
+      instructions,
       // Exactly ["audio"] or exactly ["text"] — this is not a list you can mix.
       // Asking for audio still gives you a text transcript of what was spoken,
       // via the response.output_audio_transcript.* events.

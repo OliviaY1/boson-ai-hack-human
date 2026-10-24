@@ -63,6 +63,8 @@ export interface InterviewQuestion {
   text: string;
   status: "pending" | "current" | "answered";
   added?: boolean;
+  /** Dropped during a live call (Claude decided it no longer fits); kept for the record. */
+  removed?: boolean;
 }
 
 export interface TranscriptTurn {
@@ -92,6 +94,8 @@ export interface Interview {
   questions: InterviewQuestion[];
   transcript: TranscriptTurn[];
   findings: Finding[];
+  /** A real voice call (Higgs Realtime) is running; the demo simulation leaves it alone. */
+  live?: boolean;
 }
 
 export interface FindingReview {

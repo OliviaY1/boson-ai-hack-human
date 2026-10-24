@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AppShell, PageHeader } from "@/components/app-shell";
-import { Button, Card, ConfirmDialog } from "@/components/ui-kit";
+import { Button, Card, ConfirmDialog, Label, Select, Textarea } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
+import { AVATAR_OPTIONS, useAlexaSettings, type AlexaSettings } from "@/lib/alexa-settings";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -62,6 +63,7 @@ function SettingsPage() {
           />
         </Card>
         {done && <p className="mt-3 text-sm text-success">{done}</p>}
+        <AlexaCard />
         <ConfirmDialog
           open={confirm}
           onClose={() => setConfirm(false)}
@@ -95,6 +97,94 @@ function Row({
         <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
       </div>
       <div className="shrink-0">{action}</div>
+    </div>
+  );
+}
+
+/**
+ * Alexa, the voice interviewer for live calls (Higgs Realtime + Higgs Avatar).
+ * The system instructions open the call; the closing ends it.
+ */
+function AlexaCard() {
+  const { settings, save, reset, hydrated } = useAlexaSettings();
+  const [draft, setDraft] = useState<AlexaSettings>(settings);
+  const [saved, setSaved] = useState("");
+  useEffect(() => {
+    if (hydrated) setDraft(settings);
+  }, [hydrated, settings]);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(settings);
+
+  return (
+    <div className="mt-10">
+      <p className="mb-1 font-semibold">Alexa — live call interviewer</p>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Used when you start a live call from an interview. <code>{"{company}"}</code> is replaced
+        with the project&apos;s company.
+      </p>
+      <Card className="space-y-5 p-5">
+        <div className="space-y-1.5">
+          <Label htmlFor="alexa-instructions">System instructions (opening of the call)</Label>
+          <Textarea
+            id="alexa-instructions"
+            rows={4}
+            value={draft.instructions}
+            onChange={(e) => setDraft({ ...draft, instructions: e.target.value })}
+          />
+          <p className="text-xs text-muted-foreground">
+            Sent to Higgs Realtime in the first session.update; Alexa speaks first. Keep it short.
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="alexa-closing">Closing</Label>
+          <Textarea
+            id="alexa-closing"
+            rows={2}
+            value={draft.closing}
+            onChange={(e) => setDraft({ ...draft, closing: e.target.value })}
+          />
+          <p className="text-xs text-muted-foreground">
+            Said after the last question, or right after the interviewee declines. The call ends once
+            Alexa has said it.
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="alexa-avatar">Avatar</Label>
+          <div>
+            <Select
+              id="alexa-avatar"
+              value={draft.avatarId}
+              onChange={(e) => setDraft({ ...draft, avatarId: e.target.value })}
+            >
+              {AVATAR_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            disabled={!dirty}
+            onClick={() => {
+              save(draft);
+              setSaved("Alexa settings saved.");
+            }}
+          >
+            Save
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              reset();
+              setSaved("Alexa settings reset to the defaults.");
+            }}
+          >
+            Reset to defaults
+          </Button>
+          {saved && !dirty && <span className="text-sm text-success">{saved}</span>}
+        </div>
+      </Card>
     </div>
   );
 }

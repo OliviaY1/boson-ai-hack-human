@@ -21,3 +21,26 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
 
+
+  # The consultant dashboard (frontend/, TanStack Start + bun).
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run test
+      - run: bun run build
+      # Vite builds without type-checking, so run tsc too. The dashboard's tsconfig is
+      # stricter than the repo root's, and the shared ../src files predate it, so this
+      # step only fails on errors in the dashboard's own integration files and src/call.
+      - name: Typecheck the live-call integration
+        run: |
+          bunx tsc --noEmit -p . > tsc.txt 2>&1 || true
+          grep -E "^(src/components/live-call|src/lib/alexa-settings|src/routes/settings|src/routes/projects\.\\\$projectId\.live|src/components/research|src/lib/(types|store))|^\.\./src/(call|avatar)/" tsc.txt > mine.txt || true
+          head -10 mine.txt | while IFS= read -r line; do echo "::error::$line"; done
+          echo "$(wc -l < tsc.txt) tsc lines in total, $(wc -l < mine.txt) in integration files"
+          test ! -s mine.txt

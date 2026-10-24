@@ -12,4 +12,13 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    // Live calls: the dashboard reuses the Higgs Realtime / Avatar client code in ../src
+    // (imported as "@higgs/..."), and its /api/* calls go to the same token server as the
+    // debug page (npm run dev at the repo root, port 3000).
+    server: {
+      fs: { allow: [".."] },
+      proxy: { "/api": { target: "http://localhost:3000", changeOrigin: true } },
+    },
+  },
 });

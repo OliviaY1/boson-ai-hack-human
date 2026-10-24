@@ -71,7 +71,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const launched = autoLaunchInterviews(p);
           if (!launched.interviews.some((i) => i.status === "In Progress")) return p;
           const interviews = launched.interviews.map((iv, idx) =>
-            iv.status === "In Progress" && (n + idx) % 2 === 0 ? advanceMockInterview(iv) : iv,
+            // Live calls are driven by the real call, never by the simulation.
+            iv.status === "In Progress" && !iv.live && (n + idx) % 2 === 0
+              ? advanceMockInterview(iv)
+              : iv,
           );
           changed = true;
           return touch({ ...launched, interviews });

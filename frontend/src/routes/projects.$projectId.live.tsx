@@ -18,6 +18,7 @@ import {
   TranscriptViewer,
 } from "@/components/research";
 import { InterviewStatusBadge } from "@/components/status";
+import { AvatarView, LiveCallBar, useLiveCall } from "@/components/live-call";
 import {
   Badge,
   Button,
@@ -206,7 +207,10 @@ function InterviewDetail({
   const [q, setQ] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const call = useLiveCall(project, iv, setIv);
   const done = iv.status === "Completed";
+  // A live call drives this interview; the simulation controls stay out of its way.
+  const simControls = !done && !iv.live && !call.running;
   return (
     <>
       <div className="flex items-start justify-between border-b px-6 py-4">
@@ -218,7 +222,7 @@ function InterviewDetail({
           <p className="text-sm text-muted-foreground">{expert?.title}</p>
         </div>
         <div className="flex items-center gap-1.5">
-          {!done && (
+          {simControls && (
             <>
               <Button variant="secondary" size="sm" onClick={() => setShowAdd((s) => !s)}>
                 <MessageSquarePlus /> Add Follow-Up Question
@@ -261,7 +265,8 @@ function InterviewDetail({
           </Button>
         </div>
       </div>
-      {showAdd && !done && (
+      <LiveCallBar call={call} />
+      {showAdd && simControls && (
         <form
           className="flex gap-2 border-b bg-primary-soft px-6 py-3"
           onSubmit={(e) => {
@@ -292,9 +297,10 @@ function InterviewDetail({
           <TranscriptViewer project={project} interview={iv} highlightTurnId={highlightTurn} />
         </div>
         <div className="min-h-0 space-y-6 overflow-y-auto border-l bg-muted/30 px-4 py-5">
+          <AvatarView mediaRef={call.mediaRef} state={call.state} />
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Interview questions
+              Interview questions{call.running ? " · live" : ""}
             </p>
             <QuestionStatusList questions={iv.questions} />
           </div>

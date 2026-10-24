@@ -21,53 +21,17 @@ import { SpeechTimeline } from "./ui/SpeechTimeline";
 import { LlmPanel, type LlmCall } from "./ui/LlmPanel";
 import { QuestionList, type RemovedQuestion } from "./ui/QuestionList";
 import { StatusBar } from "./ui/StatusBar";
-
-/**
- * The default for the System instructions box. Higgs only replies after you
- * speak (server VAD starts each response), so the script is written as
- * replies to your turns.
- */
-const DEFAULT_INSTRUCTIONS = `You are Alexa from a private equity firm. Say exactly: "Hi, I'm Alexa from a private equity firm. Do you have one minute for a few quick questions about Nike?" Nothing else.`;
-
-/** One per line. Each is sent in its own session.update after you finish a turn. */
-/** What the interview is for. Sent to Claude as context with every call. */
-const DEFAULT_GOAL =
-  "Private equity consumer research on Nike: which sports brands people buy and why, " +
-  "how their Nike spending is changing, and, for people who don't buy Nike or sports " +
-  "brands, why not.";
-
-const DEFAULT_QUESTIONS = [
-  "Which sports brand do you buy most?",
-  "Why that brand?",
-  "Are you buying more Nike this year, or less?",
-].join("\n");
-
-/** Sent in one more session.update after the answer to the last question. */
-const DEFAULT_CLOSING = "That's all my questions. Thank you so much for your time, have a great day!";
-
-/** The short instructions sent for each question. */
-function questionInstructions(question: string): string {
-  return `You are Alexa, a market researcher. Say exactly: "${question}" Nothing else.`;
-}
-
-/**
- * The step right after the greeting: the model itself decides whether the
- * person agreed. This is sent when the greeting ends, before they answer, so
- * the code cannot know their answer yet.
- */
-function firstQuestionInstructions(question: string, closing: string): string {
-  return `You are Alexa, a market researcher. If the person said no, declined, or has no time, say exactly: "${closing}" Otherwise say exactly: "${question}" Nothing else.`;
-}
-
-/** Did this reply say this line? Compared word by word, ignoring case and punctuation. */
-function saidLine(reply: string, line: string): boolean {
-  const words = (t: string) => t.toLowerCase().match(/[a-z0-9']+/g) ?? [];
-  const target = words(line);
-  if (target.length === 0) return false;
-  const said = new Set(words(reply));
-  const hits = target.filter((w) => said.has(w)).length;
-  return hits / target.length >= 0.8;
-}
+import {
+  DEFAULT_CLOSING,
+  DEFAULT_GOAL,
+  DEFAULT_INSTRUCTIONS,
+  DEFAULT_QUESTIONS,
+  fetchQuestionChanges,
+  firstQuestionInstructions,
+  questionInstructions,
+  saidLine,
+  splitQuestions,
+} from "./call/script";
 
 /**
  * Save the event log as a JSON file. Audio payloads (input_audio_buffer.append
@@ -97,41 +61,6 @@ function downloadLog(entries: LogEntry[]): void {
   a.download = `event-log-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-/** The questions box as a list: one per line, blanks dropped. */
-function splitQuestions(text: string): string[] {
-  return text
-    .split("\n")
-    .map((q) => q.trim())
-    .filter(Boolean);
-}
-
-/**
- * Ask Claude Haiku 5.5 (through our server) what to add to and remove from
- * the questions not asked yet.
- */
-async function fetchQuestionChanges(payload: {
-  context: string;
-  audience: "customer" | "expert";
-  asked: string[];
-  remaining: string[];
-  transcript: string;
-}): Promise<Omit<LlmCall, "id" | "at">> {
-  try {
-    const res = await fetch("/api/questions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await res.json();
-    const prompt = body.prompt ?? {};
-    const common = { model: prompt.model, system: prompt.system, user: prompt.user, ms: body.ms };
-    if (!res.ok) return { ...common, status: "error", error: body.error ?? `HTTP ${res.status}` };
-    return { ...common, status: "ok", raw: body.raw, add: body.add ?? [], remove: body.remove ?? [] };
-  } catch (e) {
-    return { status: "error", error: e instanceof Error ? e.message : String(e) };
-  }
 }
 
 /** Ask our own server for a fresh ephemeral key. One per connection. */

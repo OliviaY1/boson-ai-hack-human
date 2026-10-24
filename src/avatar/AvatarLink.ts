@@ -71,7 +71,7 @@ interface LkRoom {
 }
 interface LkModule {
   Room: new (options?: Record<string, unknown>) => LkRoom;
-  RoomEvent: Record<string, string>;
+  RoomEvent: { TrackSubscribed: string; ParticipantDisconnected: string; Disconnected: string };
 }
 
 declare global {

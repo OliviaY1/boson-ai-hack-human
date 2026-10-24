@@ -250,7 +250,9 @@ export function QuestionStatusList({ questions }: { questions: InterviewQuestion
             key={q.id}
             className={cn(
               "flex gap-2.5 rounded-md px-2 py-1.5 text-sm",
-              q.status === "current" && "bg-primary-soft",
+              q.status === "current" && !q.removed && "bg-primary-soft",
+              q.added && !q.removed && "animate-fade-up",
+              q.removed && "opacity-60",
             )}
           >
             <Icon
@@ -263,11 +265,22 @@ export function QuestionStatusList({ questions }: { questions: InterviewQuestion
                     : "text-muted-foreground",
               )}
             />
-            <span className={cn("flex-1", q.status === "answered" && "text-muted-foreground")}>
+            <span
+              className={cn(
+                "flex-1",
+                q.status === "answered" && "text-muted-foreground",
+                q.removed && "text-muted-foreground line-through",
+              )}
+            >
               <span className="mr-1.5 font-mono text-xs text-muted-foreground">{i + 1}.</span>
               {q.text}
             </span>
-            {q.added && (
+            {q.removed && (
+              <Badge tone="danger" className="h-fit">
+                Removed
+              </Badge>
+            )}
+            {q.added && !q.removed && (
               <Badge tone="warning" className="h-fit">
                 Added
               </Badge>

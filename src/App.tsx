@@ -12,6 +12,7 @@ import {
   type TranscriptState,
 } from "./state/transcriptStore";
 import { SERVER } from "./realtime/events";
+import { AvatarLink } from "./avatar/AvatarLink";
 import { DebugDrawer } from "./ui/DebugDrawer";
 import { MicButton } from "./ui/MicButton";
 import { SessionPanel } from "./ui/SessionPanel";
@@ -191,6 +192,35 @@ export default function App() {
   const closingRef = useRef(closing);
   closingRef.current = closing;
 
+  // HIGGS AVATAR: optional. When on, Connect first starts an avatar session and
+  // Higgs's audio is played by the avatar (lip-synced) instead of locally.
+  const [useAvatar, setUseAvatar] = useState(true);
+  const useAvatarRef = useRef(useAvatar);
+  useAvatarRef.current = useAvatar;
+  const [avatarId, setAvatarId] = useState("builtin_claire_v1");
+  const avatarIdRef = useRef(avatarId);
+  avatarIdRef.current = avatarId;
+  const [avatarStatus, setAvatarStatus] = useState("off");
+  const avatarRef = useRef<AvatarLink | null>(null);
+  const avatarMediaRef = useRef<HTMLDivElement | null>(null);
+  const avatarLogSeq = useRef(1_000_000_000);
+
+  function avatarLog(message: string): void {
+    const entry: LogEntry = { id: ++avatarLogSeq.current, dir: "info", type: "avatar", at: Date.now(), raw: message };
+    setLog((l) => [...l, entry]);
+  }
+
+  /** Leave the room, end the Boson session, and go back to local playback. */
+  async function closeAvatar(status = "off"): Promise<void> {
+    const link = avatarRef.current;
+    avatarRef.current = null;
+    clientRef.current?.setAvatar(null);
+    if (link) {
+      await link.close();
+      setAvatarStatus(status);
+    }
+  }
+
   /**
    * Send the transcript and the question list to Claude, then apply its
    * changes to the questions not asked yet. Asked questions stay where they
@@ -258,7 +288,11 @@ export default function App() {
         }
         return null;
       },
-      onConnectionState: setConnection,
+      onConnectionState: (s) => {
+        setConnection(s);
+        // The conversation is over (Disconnect, closing line, or an error): end the avatar too.
+        if (s === "closed") void closeAvatar();
+      },
       onActivity: setActivity,
       onLog: (entry) => setLog((l) => [...l, entry]),
       onClose: (info) => setCloseMessage(info.message),
@@ -290,7 +324,10 @@ export default function App() {
 
   useEffect(() => {
     const client = clientRef.current!;
-    return () => void client.close();
+    return () => {
+      void closeAvatar();
+      void client.close();
+    };
   }, []);
 
   const connect = useCallback(async () => {
@@ -301,7 +338,33 @@ export default function App() {
     setRemovedQs([]);
     greetingAnsweredRef.current = false;
     closingSentRef.current = false;
-    await clientRef.current!.connect();
+    const client = clientRef.current!;
+    // Inside the click: unlock local audio now, before the avatar's await.
+    void client.resumeAudio();
+
+    if (useAvatarRef.current && !avatarRef.current && avatarMediaRef.current) {
+      setAvatarStatus("starting…");
+      try {
+        const link = await AvatarLink.start(avatarIdRef.current, {
+          mediaContainer: avatarMediaRef.current,
+          onPlaybackFinished: () => client.notifyAvatarPlaybackFinished(),
+          onEnded: (reason) => {
+            avatarLog(`avatar ended: ${reason}`);
+            void closeAvatar(`ended: ${reason} — playing audio locally`);
+          },
+          onLog: avatarLog,
+        });
+        avatarRef.current = link;
+        client.setAvatar(link);
+        setAvatarStatus(`live · ${link.sessionId}`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        avatarLog(`avatar failed: ${msg}`);
+        client.setAvatar(null);
+        setAvatarStatus(`error: ${msg} — continuing without the avatar`);
+      }
+    }
+    await client.connect();
   }, []);
 
   const send = useCallback(() => {
@@ -428,6 +491,32 @@ export default function App() {
 
       {/* Right column: what Claude is doing to the questions, live. */}
       <aside className="layout-right">
+        <section className="avatar-panel">
+          <h2>Higgs Avatar</h2>
+          <div className="row avatar-controls">
+            <label>
+              <input
+                type="checkbox"
+                checked={useAvatar}
+                disabled={connection === "open" || connection === "connecting"}
+                onChange={(e) => setUseAvatar(e.target.checked)}
+              />{" "}
+              Use avatar
+            </label>
+            <select
+              value={avatarId}
+              disabled={!useAvatar || connection === "open" || connection === "connecting"}
+              onChange={(e) => setAvatarId(e.target.value)}
+            >
+              <option value="builtin_claire_v1">Claire</option>
+              <option value="builtin_emma_v1">Emma</option>
+              <option value="builtin_james_v1">James</option>
+            </select>
+          </div>
+          <p className="avatar-status">{avatarStatus}</p>
+          <div className="avatar-media" ref={avatarMediaRef} />
+        </section>
+
         <QuestionList
           questions={splitQuestions(questions)}
           isSaid={isAsked}

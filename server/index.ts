@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import express from "express";
 import dotenv from "dotenv";
+import { HttpError, loadLiveKitConfig, startAvatar, stopAvatar } from "./avatar";
 
 dotenv.config();
 
@@ -189,6 +190,62 @@ app.get("/api/token", async (_req, res) => {
     return res.status(502).json({
       error: err instanceof Error ? err.message : "Failed to reach the Boson API",
     });
+  }
+});
+
+// --- Higgs Avatar ---------------------------------------------------------------
+
+const DEFAULT_AVATAR_ID = "builtin_claire_v1";
+const AVATAR_MAX_DURATION_SECONDS = 600;
+
+/**
+ * POST /api/avatar/start  { avatarId? }
+ *   -> { sessionId, url, roomName, token, avatarIdentity, publisherIdentity, ... }
+ *
+ * Creates a LiveKit room, mints the avatar's and the browser's tokens, and
+ * starts a Boson avatar session in that room. The browser then joins with
+ * `token` and streams Higgs Realtime's audio to the avatar.
+ */
+app.post("/api/avatar/start", async (req, res) => {
+  const livekit = loadLiveKitConfig();
+  if (!BOSON_API_KEY) return res.status(500).json({ error: "No BOSON_API_KEY in .env." });
+  if (!livekit) {
+    return res
+      .status(500)
+      .json({ error: "Set LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET in .env." });
+  }
+  const avatarId = String(req.body?.avatarId || DEFAULT_AVATAR_ID);
+  try {
+    const result = await startAvatar({
+      boson: { baseUrl: BOSON_BASE_URL, apiKey: BOSON_API_KEY },
+      livekit,
+      avatarId,
+      maxDurationSeconds: AVATAR_MAX_DURATION_SECONDS,
+    });
+    console.log(`avatar session ${result.sessionId} started in room ${result.roomName}`);
+    return res.json(result);
+  } catch (err) {
+    console.error("avatar start error:", err);
+    if (err instanceof HttpError) {
+      if (err.retryAfter) res.setHeader("Retry-After", err.retryAfter);
+      return res.status(err.status).json({ error: err.message, retryAfter: err.retryAfter });
+    }
+    return res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+/** POST /api/avatar/stop  { sessionId } — DELETE /v1/avatar/sessions/{id}. */
+app.post("/api/avatar/stop", async (req, res) => {
+  const sessionId = String(req.body?.sessionId ?? "");
+  if (!BOSON_API_KEY || !sessionId) return res.status(400).json({ error: "sessionId required" });
+  try {
+    const session = await stopAvatar({ baseUrl: BOSON_BASE_URL, apiKey: BOSON_API_KEY }, sessionId);
+    console.log(`avatar session ${sessionId} released`);
+    return res.json({ ok: true, session });
+  } catch (err) {
+    console.error("avatar stop error:", err);
+    const status = err instanceof HttpError ? err.status : 502;
+    return res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
 

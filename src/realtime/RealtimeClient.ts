@@ -70,6 +70,17 @@ export interface RealtimeCallbacks {
   endsSession?: (assistantText: string) => boolean;
 }
 
+/**
+ * Where Higgs's audio goes when an avatar is attached (src/avatar/AvatarLink.ts)
+ * instead of the local speaker.
+ */
+export interface AvatarSink {
+  pushAudio(b64: string): void;
+  endSegment(): void;
+  /** Stop and drop queued audio; resolves with the ms actually played, if known. */
+  clear(): Promise<number | null>;
+}
+
 let logSeq = 0;
 
 /**
@@ -129,6 +140,8 @@ export class RealtimeClient {
   private sessionReady = false;
   /** The speak-first response.create has been sent on this connection. */
   private spokeFirst = false;
+  /** When set, Higgs's audio goes to the avatar and the local player stays silent. */
+  private avatar: AvatarSink | null = null;
   /** Disconnect as soon as playback finishes (the closing line was said). */
   private endAfterPlayback = false;
   private endFallback: ReturnType<typeof setTimeout> | null = null;
@@ -136,13 +149,30 @@ export class RealtimeClient {
   constructor(callbacks: RealtimeCallbacks) {
     this.cb = callbacks;
     this.player = new RingPlayer((speaking) => {
-      if (!speaking) this.setActivity(this.capture?.active ? "listening" : "idle");
-      if (!speaking && this.endAfterPlayback) this.endNow("closing line finished playing");
+      if (!speaking) this.onPlaybackIdle();
     });
     this.capture = new MicCapture(
       (base64) => this.send(inputAudioAppend(base64)),
       (rms) => this.cb.onMicLevel?.(rms),
     );
+  }
+
+  /**
+   * Route Higgs's audio to an avatar (or back to the local player with null).
+   * Only one of the two ever plays it, so there is no duplicate audio.
+   */
+  setAvatar(sink: AvatarSink | null): void {
+    this.avatar = sink;
+  }
+
+  /** The avatar finished speaking an utterance (its lk.playback_finished). */
+  notifyAvatarPlaybackFinished(): void {
+    this.onPlaybackIdle();
+  }
+
+  /** Resume the local AudioContext; call inside the click that starts things. */
+  resumeAudio(): Promise<void> {
+    return this.player.resume();
   }
 
   get connectionState(): ConnectionState {
@@ -343,11 +373,17 @@ export class RealtimeClient {
         const b64 = evt.delta;
         if (typeof b64 === "string" && b64.length > 0) {
           if (typeof evt.item_id === "string") this.currentAssistantItemId = evt.item_id;
-          this.player.enqueueBase64(b64);
+          if (this.avatar) this.avatar.pushAudio(b64);
+          else this.player.enqueueBase64(b64);
           this.setActivity("speaking");
         }
         break;
       }
+
+      case SERVER.outputAudioDone:
+        // End of this reply's audio: the avatar's segment ends here.
+        this.avatar?.endSegment();
+        break;
 
       case SERVER.error:
         // Never let these pass silently. A session field the server rejected is
@@ -361,6 +397,12 @@ export class RealtimeClient {
         // handle. They are already logged. Never throw here.
         break;
     }
+  }
+
+  /** Nothing is playing any more (local player drained, or the avatar finished). */
+  private onPlaybackIdle(): void {
+    this.setActivity(this.capture?.active ? "listening" : "idle");
+    if (this.endAfterPlayback) this.endNow("closing line finished playing");
   }
 
   private endNow(why: string): void {
@@ -442,6 +484,8 @@ export class RealtimeClient {
    * The turn is over. If it contained tool calls, this is where we answer them.
    */
   private onResponseDone(evt: ServerEvent): void {
+    // Close the avatar's segment even if output_audio.done never came.
+    this.avatar?.endSegment();
     // ⚠ The double-fire. Tool calls that already arrived via
     // function_call_arguments.done can appear AGAIN in response.done's output
     // list. We still walk it — occasionally a call shows up only here — but
@@ -520,7 +564,9 @@ export class RealtimeClient {
    */
   private async handleBargeIn(): Promise<void> {
     this.setActivity("listening");
-    const playedMs = await this.player.flush();
+    // With an avatar, it is the avatar's queue that has to be cleared, and its
+    // playback_finished says how far it got.
+    const playedMs = this.avatar ? ((await this.avatar.clear()) ?? 0) : await this.player.flush();
     if (this.currentAssistantItemId && playedMs > 0) {
       this.send(truncateItem(this.currentAssistantItemId, playedMs));
     }

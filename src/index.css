@@ -292,6 +292,38 @@ select {
   color: var(--text);
 }
 
+/* --- Higgs Avatar --- */
+
+.avatar-panel h2 {
+  font-size: 1rem;
+  margin: 0 0 0.5rem;
+}
+
+.avatar-controls {
+  align-items: center;
+}
+
+.avatar-status {
+  margin: 0 0 0.6rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  word-break: break-word;
+}
+
+.avatar-media {
+  margin-bottom: 1.2rem;
+}
+
+.avatar-video {
+  display: block;
+  width: 100%;
+  max-width: 22rem;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  background: var(--panel);
+}
+
 /* --- live question list --- */
 
 .qlist {

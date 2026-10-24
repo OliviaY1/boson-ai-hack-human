@@ -22,6 +22,19 @@ Two additions to the finished app:
   sent in a new `session.update`, so it is in place before the server starts her next reply. After each transcription, Claude Haiku 5.5 (`POST /api/questions`
   in `server/index.ts`) edits the questions not yet asked. Needs `ANTHROPIC_API_KEY` in `.env`.
 
+### Higgs Avatar (optional)
+
+With **Use avatar** ticked, Connect first calls `POST /api/avatar/start` (`server/avatar.ts`):
+it creates a LiveKit room, mints tokens, and starts a Boson avatar session
+(`POST /v1/avatar/sessions`, built-in `builtin_claire_v1` by default). The browser joins the
+room as the avatar's publisher (`agent`) and keeps its Higgs Realtime WebSocket as before;
+Higgs's audio is streamed to the avatar (`src/avatar/AvatarLink.ts`, LiveKit byte stream
+`lk.audio_stream`, 24 kHz PCM16 mono) instead of the local speaker, and the avatar's
+lip-synced video and audio are played from the room. Barge-in sends `lk.clear_buffer` to
+the avatar and truncates at the position its `lk.playback_finished` reports. Needs
+`LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` in `.env`; without them the app
+falls back to local playback.
+
 ## The parts
 
 | Part | What you build | Checkpoint |

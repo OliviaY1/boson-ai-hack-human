@@ -181,15 +181,16 @@ export function responseCreate(): ClientEvent {
  */
 export const SCRIPT_METADATA = { source: "script" } as const;
 
+// Kept short and direct on purpose. A longer, rule-heavy version (verified
+// 2026-10-24 against the live API) read a long paragraph back verbatim but
+// turned the short question "What's your name?" into a generic greeting.
 export function scriptInstructions(script: string): string {
   return [
-    "Your next turn is scripted. Say the script below aloud, word for word, exactly",
-    "as written, as your own words. Do not answer it, explain it, or comment on it,",
-    "and add nothing before or after it: no greeting, no filler, no follow-up.",
-    "Do not call any tools. When you have said it, stop and let the user reply.",
+    "Your reply is fixed: say exactly the text inside the quotation marks below, word for",
+    "word, as your own words, and nothing else. Do not answer it, greet, or add anything",
+    "before or after it, and do not use tools.",
     "",
-    "SCRIPT:",
-    script,
+    `"${script}"`,
   ].join("\n");
 }
 

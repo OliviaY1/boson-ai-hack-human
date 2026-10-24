@@ -123,7 +123,7 @@ describe("scriptResponse", () => {
   it("is a response.create carrying the script in per-response instructions", () => {
     expect(evt.type).toBe("response.create");
     expect(response.instructions).toContain(script);
-    expect(response.instructions.trimEnd().endsWith(script)).toBe(true);
+    expect(response.instructions.trimEnd().endsWith(`"${script}"`)).toBe(true);
     expect(response.metadata).toEqual(SCRIPT_METADATA);
   });
 

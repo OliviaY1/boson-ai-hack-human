@@ -7,6 +7,10 @@
 </p>
 
 <p align="center">
+  <a href="https://www.youtube.com/watch?v=BDOH0RhbuJw"><strong>▶ Watch the Diligence Live demo on YouTube</strong></a>
+</p>
+
+<p align="center">
   <a href="#the-story">The story</a> ·
   <a href="#try-the-demo">Demo walkthrough</a> ·
   <a href="#run-it-locally">Run locally</a> ·

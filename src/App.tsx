@@ -14,9 +14,23 @@ import { DebugDrawer } from "./ui/DebugDrawer";
 import { MicButton } from "./ui/MicButton";
 import { SessionPanel } from "./ui/SessionPanel";
 import { VoiceEventsPanel } from "./ui/VoiceEventsPanel";
-import { SYSTEM_PROMPT } from "./realtime/sessionConfig";
+import { SpeechTimeline } from "./ui/SpeechTimeline";
 import { StatusBar } from "./ui/StatusBar";
 import { TranscriptPanel } from "./ui/TranscriptPanel";
+
+/**
+ * The default for the System instructions box. Higgs only replies after you
+ * speak (server VAD starts each response), so the script is written as
+ * replies to your turns.
+ */
+const DEFAULT_INSTRUCTIONS = [
+  "You are a voice agent following a fixed script. Say only the scripted lines,",
+  "word for word, and nothing else. Never say \"Hello! How can I assist you today?\"",
+  "",
+  "Script:",
+  "1. Your first reply, whatever the user says: \"Who are you?\"",
+  "2. Your reply after the user answers that: \"Nice to meet you.\"",
+].join("\n");
 
 /** Ask our own server for a fresh ephemeral key. One per connection. */
 async function fetchToken(): Promise<string> {
@@ -36,9 +50,10 @@ export default function App() {
   const [micActive, setMicActive] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
+  const [micStartAt, setMicStartAt] = useState<number | null>(null);
   // SYSTEM INSTRUCTIONS: sent in the first session.update on connect, and again
   // whenever "Send session.update" is pressed.
-  const [instructions, setInstructions] = useState(SYSTEM_PROMPT);
+  const [instructions, setInstructions] = useState(DEFAULT_INSTRUCTIONS);
   const instructionsRef = useRef(instructions);
   instructionsRef.current = instructions;
 
@@ -52,7 +67,11 @@ export default function App() {
       onActivity: setActivity,
       onLog: (entry) => setLog((l) => [...l, entry]),
       onClose: (info) => setCloseMessage(info.message),
-      onMicChange: setMicActive,
+      onMicChange: (active) => {
+        setMicActive(active);
+        // The timeline's zero point: every start of the microphone resets it.
+        if (active) setMicStartAt(Date.now());
+      },
       onMicLevel: setMicLevel,
       // Every server event goes through the reducer. That is the whole wiring:
       // the client knows nothing about the transcript, and the transcript knows
@@ -144,6 +163,8 @@ export default function App() {
           </button>
         </div>
       </details>
+
+      <SpeechTimeline entries={log} micStartAt={micStartAt} micActive={micActive} />
 
       <VoiceEventsPanel entries={log} />
 

@@ -186,7 +186,7 @@ function PlanExpertCard({
   const [confirm, setConfirm] = useState(false);
   const [writing, setWriting] = useState(false);
   const e = expertOf(project, pe.expertId);
-  // Ask Claude again for this person's opening questions (e.g. after editing their description).
+  // Ask GPT-6 again for this person's opening questions (e.g. after editing their description).
   const regenerate = async () => {
     if (!project.plan) return;
     setWriting(true);
@@ -245,10 +245,10 @@ function PlanExpertCard({
               variant="secondary"
               size="sm"
               disabled={writing}
-              title="Write this person's opening questions with Claude from the thesis and their description"
+              title="Write this person's opening questions with GPT-6 from the thesis and their description"
               onClick={() => void regenerate()}
             >
-              {writing ? "Writing…" : "Rewrite with Claude"}
+              {writing ? "Writing…" : "Rewrite with GPT-6"}
             </Button>
           )}
           {!locked && (

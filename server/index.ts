@@ -3,7 +3,7 @@ import express from "express";
 import dotenv from "dotenv";
 import { HttpError, loadLiveKitConfig, startAvatar, stopAvatar } from "./avatar";
 import { registerInterviewRoutes } from "./interviews";
-import { registerValidationRoute } from "./validation";
+import { chatJson, registerValidationRoute, resolveModel } from "./validation";
 
 dotenv.config();
 
@@ -106,7 +106,8 @@ app.post("/api/questions", async (req, res) => {
       },
       body: JSON.stringify({
         model: QUESTION_MODEL,
-        max_tokens: 300,
+        // Generous: a reply cut off by the limit is incomplete JSON and reads as "no change".
+        max_tokens: 2000,
         system,
         messages: [{ role: "user", content: userMessage }],
       }),
@@ -197,7 +198,7 @@ app.get("/api/token", async (_req, res) => {
   }
 });
 
-// --- Initial questions: Claude Haiku 5.5 writes the opening questions per person ---
+// --- Initial questions: OpenAI (GPT-6) writes the opening questions per person ---
 
 const INITIAL_SYSTEM = [
   "You design the opening questions for a short phone interview that a private equity firm's",
@@ -217,31 +218,6 @@ const INITIAL_SYSTEM = [
   '"hypothesis_ids":["..."],"questions":["..."]}',
 ].join(" ");
 
-/** One Claude Messages API call; returns the reply text. */
-async function askClaude(system: string, user: string, maxTokens: number): Promise<string> {
-  const upstream = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": ANTHROPIC_API_KEY ?? "",
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: QUESTION_MODEL,
-      max_tokens: maxTokens,
-      system,
-      messages: [{ role: "user", content: user }],
-    }),
-  });
-  const body = await upstream.text();
-  if (!upstream.ok) throw new Error(`Anthropic ${upstream.status}: ${body}`);
-  const data = JSON.parse(body) as { content?: Array<{ type: string; text?: string }> };
-  return (data.content ?? [])
-    .filter((c) => c.type === "text")
-    .map((c) => c.text ?? "")
-    .join("");
-}
-
 /**
  * POST /api/initial-questions
  *   { company, thesis, person: { name, title, description, source },
@@ -249,7 +225,9 @@ async function askClaude(system: string, user: string, maxTokens: number): Promi
  *   -> { audience, objectives, hypothesisIds, questions, raw, prompt, ms }
  */
 app.post("/api/initial-questions", async (req, res) => {
-  if (!ANTHROPIC_API_KEY) return res.status(500).json({ error: "No ANTHROPIC_API_KEY in .env." });
+  // Written by OpenAI (GPT-6), like the Findings page.
+  const openaiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!openaiKey) return res.status(500).json({ error: "No OPENAI_API_KEY in .env." });
   const { company = "", thesis = "", person = {}, hypotheses = [] } = req.body ?? {};
   const p = person as { name?: string; title?: string; description?: string; source?: string };
   const hyps = Array.isArray(hypotheses)
@@ -271,10 +249,11 @@ app.post("/api/initial-questions", async (req, res) => {
   ]
     .filter(Boolean)
     .join("\n\n");
-  const prompt = { model: QUESTION_MODEL, system: INITIAL_SYSTEM, user };
   const startedAt = Date.now();
+  let model = "";
   try {
-    const raw = await askClaude(INITIAL_SYSTEM, user, 500);
+    model = await resolveModel(openaiKey);
+    const raw = await chatJson(openaiKey, model, INITIAL_SYSTEM, user);
     const match = raw.match(/\{[\s\S]*\}/);
     const parsed = (match ? JSON.parse(match[0]) : {}) as {
       audience?: unknown;
@@ -285,21 +264,21 @@ app.post("/api/initial-questions", async (req, res) => {
     const strings = (v: unknown) =>
       Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
     const questions = strings(parsed.questions).map((q) => q.trim());
-    if (!questions.length) throw new Error(`No questions in Claude's reply: ${raw}`);
+    if (!questions.length) throw new Error(`No questions in the reply: ${raw}`);
     return res.json({
       audience: parsed.audience === "customer" ? "customer" : "expert",
       objectives: typeof parsed.objectives === "string" ? parsed.objectives : "",
       hypothesisIds: strings(parsed.hypothesis_ids),
       questions,
       raw,
-      prompt,
+      prompt: { model, system: INITIAL_SYSTEM, user },
       ms: Date.now() - startedAt,
     });
   } catch (err) {
     console.error("initial questions error:", err);
     return res.status(502).json({
       error: err instanceof Error ? err.message : String(err),
-      prompt,
+      prompt: { model, system: INITIAL_SYSTEM, user },
       ms: Date.now() - startedAt,
     });
   }

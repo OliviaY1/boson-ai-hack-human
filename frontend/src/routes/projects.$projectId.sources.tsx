@@ -392,7 +392,7 @@ function Sources() {
             <Loader2 className="mx-auto size-6 animate-spin text-primary" />
             <p className="mt-4 font-medium">Generating research plan</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Claude is writing opening questions for {chosen.length} selected{" "}
+              GPT-6 is writing opening questions for {chosen.length} selected{" "}
               {chosen.length === 1 ? "person" : "people"} from the investment thesis…
             </p>
           </Card>

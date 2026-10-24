@@ -2,11 +2,12 @@ import { uid } from "./mock-service";
 import type { DiligenceProject, Expert, InvestmentHypothesis, PlanExpert, ResearchPlan } from "./types";
 
 /**
- * Opening questions written by Claude Haiku 5.5 for one person, from the
+ * Opening questions written by OpenAI (GPT-6) for one person, from the
  * project's investment thesis and the person's description
  * (POST /api/initial-questions on the backend in server/index.ts).
  */
 export interface InitialQuestions {
+  model: string;
   audience: "customer" | "expert";
   objectives: string;
   hypothesisIds: string[];
@@ -33,9 +34,13 @@ export async function fetchInitialQuestions(
       hypotheses: hypotheses.map((h) => ({ id: h.id, title: h.title, description: h.description })),
     }),
   });
-  const body = (await res.json()) as Partial<InitialQuestions> & { error?: string };
+  const body = (await res.json()) as Partial<InitialQuestions> & {
+    error?: string;
+    prompt?: { model?: string };
+  };
   if (!res.ok || !body.questions?.length) throw new Error(body.error ?? `HTTP ${res.status}`);
   return {
+    model: body.prompt?.model ?? "GPT-6",
     audience: body.audience === "customer" ? "customer" : "expert",
     objectives: body.objectives ?? "",
     hypothesisIds: body.hypothesisIds ?? [],
@@ -65,13 +70,13 @@ export async function withClaudeQuestions(
       hypothesisIds: hypothesisIds.length ? hypothesisIds : pe.hypothesisIds,
       questions: q.questions.map((text) => ({ id: uid("q"), text })),
       questionSource: "claude",
-      questionNote: q.audience === "customer" ? "Written by Claude for a customer" : "Written by Claude for an industry expert",
+      questionNote: `Written by ${q.model} for ${q.audience === "customer" ? "a customer" : "an industry expert"}`,
     };
   } catch (e) {
     return {
       ...pe,
       questionSource: "template",
-      questionNote: `Template questions — Claude failed: ${e instanceof Error ? e.message : String(e)}`,
+      questionNote: `Template questions — GPT-6 failed: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
 }

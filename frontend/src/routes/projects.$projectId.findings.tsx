@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight, Compass, FileText, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, Compass, FileText, Loader2, RefreshCw } from "lucide-react";
 import { expertOf } from "@/components/research";
 import { AssessmentBadge } from "@/components/status";
 import { Badge, Button, buttonVariants, Card, EmptyState, SectionTitle } from "@/components/ui-kit";
@@ -216,13 +216,6 @@ function ThesisValidationSection({
       )}
       {r && (
         <div className={cn("space-y-4", v.loading && "opacity-60")}>
-          <Card className="flex gap-3 p-5">
-            <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
-            <div>
-              <p className="font-semibold">{r.overall.verdict}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{r.overall.summary}</p>
-            </div>
-          </Card>
           <Card className="overflow-hidden">
             <table className="w-full text-sm">
               <thead className="border-b bg-muted/60 text-left text-xs text-muted-foreground">

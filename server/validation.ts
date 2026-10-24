@@ -101,7 +101,12 @@ export async function resolveModel(apiKey: string): Promise<string> {
 }
 
 /** One Chat Completions call that must return a JSON object. */
-async function chatJson(apiKey: string, model: string, system: string, user: string): Promise<string> {
+export async function chatJson(
+  apiKey: string,
+  model: string,
+  system: string,
+  user: string,
+): Promise<string> {
   const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -118,8 +123,15 @@ async function chatJson(apiKey: string, model: string, system: string, user: str
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`OpenAI ${model} ${res.status}: ${text}`);
-  const data = JSON.parse(text) as { choices?: Array<{ message?: { content?: string | null } }> };
-  const content = data.choices?.[0]?.message?.content ?? "";
+  const data = JSON.parse(text) as {
+    choices?: Array<{ message?: { content?: string | null }; finish_reason?: string }>;
+  };
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content ?? "";
+  // A reply cut off by the token limit is incomplete JSON: say so instead of failing to parse it.
+  if (choice?.finish_reason === "length") {
+    throw new Error(`OpenAI ${model} hit the output token limit before finishing its reply.`);
+  }
   if (!content) throw new Error(`OpenAI ${model} returned no content: ${text.slice(0, 500)}`);
   return content;
 }

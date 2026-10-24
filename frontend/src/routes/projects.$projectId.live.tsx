@@ -127,7 +127,8 @@ function LivePage() {
               </p>
             </div>
             <div className="flex gap-2">
-              {!isPast && completed === ivs.length && (
+              {/* Findings open once any interview has finished; the rest can still run. */}
+              {!isPast && completed > 0 && (
                 <Link
                   to="/projects/$projectId/findings"
                   params={{ projectId }}

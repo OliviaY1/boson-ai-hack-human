@@ -51,14 +51,16 @@ function FindingsPage() {
   const r = generateMockFindings(project);
   const allDone =
     project.interviews.length > 0 && project.interviews.every((i) => i.status === "Completed");
+  // One finished interview is enough to open the findings (marked interim until all are done).
+  const anyDone = project.interviews.some((i) => i.status === "Completed");
   const roundNo = (project.pastRounds?.length ?? 0) + 1;
 
-  if (!r.findings.length && !allDone)
+  if (!r.findings.length && !anyDone)
     return (
       <EmptyState
         icon={<FileText />}
         title="No findings yet"
-        description="Findings are consolidated as interviews progress. Start the simulation from Live Research."
+        description="Findings open as soon as one interview has finished. Send an interview from Live Research."
         action={
           <Link to="/projects/$projectId/live" params={{ projectId }} className={buttonVariants()}>
             Open Live Research

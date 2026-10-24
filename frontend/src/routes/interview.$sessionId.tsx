@@ -201,7 +201,11 @@ function IntervieweePage() {
 function Transcript({ state, name }: { state: CallState | null; name: string }) {
   const end = useRef<HTMLDivElement>(null);
   const turns = state?.transcript ?? [];
-  useEffect(() => end.current?.scrollIntoView({ block: "nearest" }), [turns.length]);
+  // Block body on purpose: whatever an effect returns is called as its cleanup, and
+  // scrollIntoView may return a value (a promise in newer browsers).
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: "nearest" });
+  }, [turns.length]);
   if (!turns.length)
     return <p className="py-8 text-center text-sm text-muted-foreground">The conversation will appear here.</p>;
   const t0 = state?.startedAt ?? turns[0]?.at ?? 0;

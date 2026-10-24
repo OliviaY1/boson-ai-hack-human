@@ -136,6 +136,19 @@ export interface ThesisValidationResult {
   droppedQuotes: number;
 }
 
+/** GPT-6's proposal for the next research round, ready to become the plan. */
+export interface NextRoundProposal {
+  at: string;
+  model: string;
+  /** The thesis validation it was based on (its `at`); a newer validation re-proposes. */
+  basedOn: string;
+  plan: ResearchPlan;
+  /** People GPT-6 suggests recruiting, added as contacts when the round is created. */
+  newExperts: Expert[];
+  /** Why each new hypothesis is worth testing, by hypothesis id. */
+  why: Record<string, string>;
+}
+
 export interface DiligenceProject {
   id: string;
   company: string;
@@ -151,5 +164,6 @@ export interface DiligenceProject {
   /** Completed earlier research rounds; `plan` and `interviews` hold the current round. */
   pastRounds?: ResearchRound[];
   thesisValidation?: ThesisValidationResult;
+  nextRound?: NextRoundProposal;
   updatedAt: string;
 }

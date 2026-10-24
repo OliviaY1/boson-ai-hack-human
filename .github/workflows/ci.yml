@@ -49,7 +49,7 @@ jobs:
       - name: Typecheck the live-call integration
         run: |
           bunx tsc --noEmit -p . > tsc.txt 2>&1 || true
-          grep -E "^(src/components/live-call|src/lib/alexa-settings|src/lib/thesis-validation|src/routes/projects\.\\\$projectId\.findings|src/routes/interview\.|src/lib/initial-questions|src/routes/projects\.\\\$projectId\.(plan|sources)|src/routes/settings|src/routes/projects\.\\\$projectId\.live|src/components/research|src/lib/(types|store))|^\.\./src/(call|avatar)/" tsc.txt > mine.txt || true
+          grep -E "^(src/components/live-call|src/lib/alexa-settings|src/lib/thesis-validation|src/lib/next-round|src/routes/projects\.\\\$projectId\.findings|src/routes/interview\.|src/lib/initial-questions|src/routes/projects\.\\\$projectId\.(plan|sources)|src/routes/settings|src/routes/projects\.\\\$projectId\.live|src/components/research|src/lib/(types|store))|^\.\./src/(call|avatar)/" tsc.txt > mine.txt || true
           head -10 mine.txt | while IFS= read -r line; do echo "::error::$line"; done
           echo "$(wc -l < tsc.txt) tsc lines in total, $(wc -l < mine.txt) in integration files"
           test ! -s mine.txt

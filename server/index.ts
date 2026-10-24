@@ -3,7 +3,7 @@ import express from "express";
 import dotenv from "dotenv";
 import { HttpError, loadLiveKitConfig, startAvatar, stopAvatar } from "./avatar";
 import { registerInterviewRoutes } from "./interviews";
-import { chatJson, registerValidationRoute, resolveModel } from "./validation";
+import { chatJson, registerNextRoundRoute, registerValidationRoute, resolveModel } from "./validation";
 
 dotenv.config();
 
@@ -45,6 +45,7 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 registerInterviewRoutes(app);
 registerValidationRoute(app);
+registerNextRoundRoute(app);
 
 // --- Question list: Claude Haiku 5.5 decides what to add and remove ---------
 

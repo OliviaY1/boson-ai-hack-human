@@ -153,7 +153,12 @@ function buildUserMessage(company: string, thesis: string, hyps: HypothesisIn[],
         }`,
     )
     .join("\n");
-  const ivText = ivs
+  return `Company: ${company}\n\nInvestment thesis:\n${thesis || "(not given)"}\n\nHypotheses:\n${hypText}\n\nInterviews:\n\n${formatInterviews(ivs)}`;
+}
+
+/** The interviews as readable text: who, what they are, and the transcript. */
+function formatInterviews(ivs: InterviewIn[]): string {
+  return ivs
     .map((iv) => {
       const who = [iv.name, iv.title, iv.audience].filter(Boolean).join(", ");
       const lines = (iv.transcript ?? [])
@@ -164,7 +169,6 @@ function buildUserMessage(company: string, thesis: string, hyps: HypothesisIn[],
       }\n${lines || "(no transcript)"}`;
     })
     .join("\n\n");
-  return `Company: ${company}\n\nInvestment thesis:\n${thesis || "(not given)"}\n\nHypotheses:\n${hypText}\n\nInterviews:\n\n${ivText}`;
 }
 
 export function registerValidationRoute(app: Express): void {
@@ -256,6 +260,141 @@ export function registerValidationRoute(app: Express): void {
         model,
         ms: Date.now() - startedAt,
       });
+    }
+  });
+}
+
+// --- Next research round, also by GPT-6 ----------------------------------------
+
+const NEXT_ROUND_SYSTEM = `You are a senior private equity diligence analyst planning the next round of short phone interviews (about one minute each) to test an investment thesis. You get the thesis, its hypotheses with the latest assessment of each from the completed interviews, the open research gaps, the interview transcripts so far, and the consultant's contact list.
+
+Plan the next round:
+1. Hypotheses: choose up to 3 that most need evidence (not "Supported"; high-priority gaps first). For each, write a sharper hypothesis to test next:
+   - based_on: the id of the original hypothesis
+   - title: under 8 words
+   - description: one sentence starting "We believe" that states what must be true
+   - why: one sentence on the gap or the evidence so far that makes it worth testing
+2. People: propose 2 or 3 people to interview, the ones best placed to answer first-hand.
+   - Reuse a contact when one genuinely fits (give its contact_id). Re-interview someone only if a follow-up with them is the best way to close a gap.
+   - Otherwise describe a new person to recruit (contact_id null): name is a role label such as "GTA clinic owner" (never invent a real person's name), title is their role, description is their background in one sentence.
+   - audience: "customer" (buys or uses the services) or "expert" (industry, operator, adviser).
+   - reason: one sentence on why this person; objectives: one sentence.
+   - tests: the new hypotheses they will test, as "n1", "n2", "n3" in the order you listed them.
+   - questions: 3 for a customer, 4 for an expert, in the order to ask them. Each under 15 words, open-ended (not yes/no), spoken English, everyday words for customers. Build on what interviewees already said; never repeat a question already asked in the transcripts.
+
+Reply with JSON only, exactly this shape:
+{"hypotheses":[{"based_on":"...","title":"...","description":"...","why":"..."}],"people":[{"contact_id":"..."|null,"name":"...","title":"...","description":"...","audience":"customer"|"expert","reason":"...","objectives":"...","tests":["n1"],"questions":["..."]}]}`;
+
+interface ContactIn {
+  id: string;
+  name?: string;
+  title?: string;
+  description?: string;
+  interviewed?: boolean;
+}
+
+/**
+ * POST /api/next-round
+ *   { company, thesis, round, hypotheses: [{ id, title, description, assessment, rationale }],
+ *     gaps: [{ hypothesisId, gap, nextStep, priority }],
+ *     interviews: (as for /api/thesis-validation), contacts: [{ id, name, title, description, interviewed }] }
+ *   -> { model, hypotheses: [{ basedOn, title, description, why }],
+ *        people: [{ contactId | null, name, title, description, audience, reason, objectives, tests: number[], questions }], ms }
+ */
+export function registerNextRoundRoute(app: Express): void {
+  app.post("/api/next-round", async (req, res) => {
+    const apiKey = process.env.OPENAI_API_KEY?.trim();
+    if (!apiKey) return res.status(500).json({ error: "No OPENAI_API_KEY in .env." });
+    const body = (req.body ?? {}) as {
+      company?: string;
+      thesis?: string;
+      round?: number;
+      hypotheses?: Array<HypothesisIn & { assessment?: string; rationale?: string }>;
+      gaps?: Array<{ hypothesisId?: string | null; gap?: string; nextStep?: string; priority?: string }>;
+      interviews?: InterviewIn[];
+      contacts?: ContactIn[];
+    };
+    const hyps = Array.isArray(body.hypotheses) ? body.hypotheses : [];
+    const contacts = Array.isArray(body.contacts) ? body.contacts : [];
+    const ivs = Array.isArray(body.interviews) ? body.interviews : [];
+    const gaps = Array.isArray(body.gaps) ? body.gaps : [];
+
+    const user = [
+      `Company: ${String(body.company ?? "")}`,
+      `Next round: ${Number(body.round ?? 2)}`,
+      `Investment thesis:\n${String(body.thesis ?? "") || "(not given)"}`,
+      `Hypotheses and their latest assessment:\n${hyps
+        .map((h) => `- ${h.id}: ${h.title ?? ""} — ${h.assessment ?? "not assessed"}. ${h.rationale ?? ""}`)
+        .join("\n")}`,
+      `Research gaps:\n${
+        gaps.map((g) => `- [${g.priority ?? ""}] ${g.hypothesisId ?? "overall"}: ${g.gap ?? ""} Next step: ${g.nextStep ?? ""}`).join("\n") ||
+        "(none)"
+      }`,
+      `Contacts:\n${
+        contacts
+          .map(
+            (c) =>
+              `- ${c.id}: ${c.name ?? ""}, ${c.title ?? ""} — ${c.description ?? ""}${c.interviewed ? " (already interviewed)" : ""}`,
+          )
+          .join("\n") || "(none)"
+      }`,
+      `Interviews so far:\n\n${formatInterviews(ivs) || "(none)"}`,
+    ].join("\n\n");
+
+    const startedAt = Date.now();
+    let model = "";
+    try {
+      model = await resolveModel(apiKey);
+      const raw = await chatJson(apiKey, model, NEXT_ROUND_SYSTEM, user);
+      const parsed = JSON.parse(raw) as {
+        hypotheses?: Array<{ based_on?: string; title?: string; description?: string; why?: string }>;
+        people?: Array<{
+          contact_id?: string | null;
+          name?: string;
+          title?: string;
+          description?: string;
+          audience?: string;
+          reason?: string;
+          objectives?: string;
+          tests?: unknown;
+          questions?: unknown;
+        }>;
+      };
+      const known = new Set(hyps.map((h) => h.id));
+      const newHyps = (parsed.hypotheses ?? [])
+        .filter((h) => typeof h.title === "string" && h.title.trim())
+        .slice(0, 3)
+        .map((h) => ({
+          basedOn: h.based_on && known.has(h.based_on) ? h.based_on : null,
+          title: String(h.title).trim(),
+          description: String(h.description ?? "").trim(),
+          why: String(h.why ?? "").trim(),
+        }));
+      const contactIds = new Set(contacts.map((c) => c.id));
+      const strings = (v: unknown) =>
+        Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.trim() !== "") : [];
+      const people = (parsed.people ?? [])
+        .map((p) => ({
+          contactId: p.contact_id && contactIds.has(p.contact_id) ? p.contact_id : null,
+          name: String(p.name ?? "").trim() || "Recommended interviewee",
+          title: String(p.title ?? "").trim(),
+          description: String(p.description ?? "").trim(),
+          audience: p.audience === "customer" ? "customer" : "expert",
+          reason: String(p.reason ?? "").trim(),
+          objectives: String(p.objectives ?? "").trim(),
+          // "n1" -> 0, "n2" -> 1, … (indexes into `hypotheses`)
+          tests: strings(p.tests)
+            .map((t) => Number(t.replace(/\D/g, "")) - 1)
+            .filter((i) => i >= 0 && i < newHyps.length),
+          questions: strings(p.questions).map((q) => q.trim()),
+        }))
+        .filter((p) => p.questions.length > 0)
+        .slice(0, 3);
+      if (!newHyps.length && !people.length) throw new Error(`Nothing usable in the reply: ${raw.slice(0, 500)}`);
+      return res.json({ model, hypotheses: newHyps, people, ms: Date.now() - startedAt });
+    } catch (err) {
+      console.error("next round error:", err);
+      return res.status(502).json({ error: err instanceof Error ? err.message : String(err), model });
     }
   });
 }

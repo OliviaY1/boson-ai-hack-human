@@ -25,6 +25,28 @@ export function validationInputKey(p: DiligenceProject): string {
   return `${p.thesis.length}:${p.thesis.slice(0, 40)}|${hyps}|${ivs}`;
 }
 
+/** Completed interviews as the backend expects them (who, and the transcript). */
+export function interviewsPayload(p: DiligenceProject) {
+  return completedInterviews(p).map((iv) => {
+    const person = p.experts.find((e) => e.id === iv.expertId);
+    const planned = [p.plan, ...(p.pastRounds ?? []).map((r) => r.plan)]
+      .flatMap((pl) => pl?.experts ?? [])
+      .find((e) => e.expertId === iv.expertId);
+    return {
+      id: iv.id,
+      name: person?.name ?? "",
+      title: person?.title ?? "",
+      description: person?.description ?? "",
+      audience: planned?.audience ?? "",
+      status: iv.status,
+      transcript: iv.transcript.map((t) => ({
+        speaker: t.speaker === "ai" ? "interviewer" : "interviewee",
+        text: t.text,
+      })),
+    };
+  });
+}
+
 async function requestValidation(p: DiligenceProject): Promise<ThesisValidationResult> {
   const ivs = completedInterviews(p);
   const res = await fetch("/api/thesis-validation", {
@@ -39,22 +61,7 @@ async function requestValidation(p: DiligenceProject): Promise<ThesisValidationR
         description: h.description,
         evidence: h.evidence,
       })),
-      interviews: ivs.map((iv) => {
-        const person = p.experts.find((e) => e.id === iv.expertId);
-        const planned = p.plan?.experts.find((e) => e.expertId === iv.expertId);
-        return {
-          id: iv.id,
-          name: person?.name ?? "",
-          title: person?.title ?? "",
-          description: person?.description ?? "",
-          audience: planned?.audience ?? "",
-          status: iv.status,
-          transcript: iv.transcript.map((t) => ({
-            speaker: t.speaker === "ai" ? "interviewer" : "interviewee",
-            text: t.text,
-          })),
-        };
-      }),
+      interviews: interviewsPayload(p),
     }),
   });
   const body = (await res.json()) as Omit<ThesisValidationResult, "at" | "inputKey" | "interviewCount"> & {

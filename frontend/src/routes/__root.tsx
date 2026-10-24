@@ -18,7 +18,7 @@ import { RoundViewProvider } from "../lib/round-view";
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
+      <div className="max-w-2xl text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
         <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -53,6 +53,14 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
         </p>
+        {/* Development only: the actual error, so it can be reported and fixed. */}
+        {import.meta.env.DEV && (
+          <pre className="mt-4 max-h-64 overflow-auto rounded-md border bg-muted p-3 text-left text-xs whitespace-pre-wrap">
+            {error instanceof Error
+              ? `${error.name}: ${error.message}\n\n${(error.stack ?? "").split("\n").slice(0, 8).join("\n")}`
+              : String(error)}
+          </pre>
+        )}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {

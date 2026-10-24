@@ -57,7 +57,7 @@ async function requestNextRound(p: DiligenceProject): Promise<NextRoundProposal>
         return {
           id: h.id,
           title: h.title,
-          description: h.description,
+          description: h.description, // the "We believe …" text
           assessment: a?.assessment ?? "not assessed",
           rationale: a?.rationale ?? "",
         };

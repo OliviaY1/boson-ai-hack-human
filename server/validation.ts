@@ -58,6 +58,8 @@ interface Turn {
 }
 interface InterviewIn {
   id: string;
+  /** The interview's question list: "asked" (said by the interviewer), "not asked", "removed". */
+  questions?: Array<{ text: string; status: string }>;
   name?: string;
   title?: string;
   description?: string;
@@ -156,17 +158,44 @@ function buildUserMessage(company: string, thesis: string, hyps: HypothesisIn[],
   return `Company: ${company}\n\nInvestment thesis:\n${thesis || "(not given)"}\n\nHypotheses:\n${hypText}\n\nInterviews:\n\n${formatInterviews(ivs)}`;
 }
 
-/** The interviews as readable text: who, what they are, and the transcript. */
-function formatInterviews(ivs: InterviewIn[]): string {
+/**
+ * Every question the interviewer actually put to someone, de-duplicated: the
+ * "asked" planned questions plus the interviewer's own lines in the transcripts.
+ */
+export function alreadyAsked(ivs: InterviewIn[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (q: string) => {
+    const key = norm(q);
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      out.push(q.trim());
+    }
+  };
+  for (const iv of ivs) {
+    for (const q of iv.questions ?? []) if (q.status === "asked") add(q.text);
+    for (const t of iv.transcript ?? []) if (t.speaker === "interviewer" && t.text.includes("?")) add(t.text);
+  }
+  return out;
+}
+
+/** The interviews as readable text: who, their questions, and the transcript. */
+export function formatInterviews(ivs: InterviewIn[]): string {
   return ivs
     .map((iv) => {
       const who = [iv.name, iv.title, iv.audience].filter(Boolean).join(", ");
       const lines = (iv.transcript ?? [])
         .map((t) => `${t.speaker === "interviewer" ? "Interviewer" : "Interviewee"}: ${t.text}`)
         .join("\n");
+      const qs = iv.questions ?? [];
+      const listed = (status: string) =>
+        qs.filter((q) => q.status === status).map((q) => `  - ${q.text}`).join("\n") || "  (none)";
+      const questionBlock = qs.length
+        ? `Planned questions asked:\n${listed("asked")}\nPlanned questions not reached:\n${listed("not asked")}\nQuestions dropped during the call:\n${listed("removed")}\n`
+        : "";
       return `### Interview ${iv.id} — ${who}\nAbout the interviewee: ${iv.description ?? ""}\nStatus: ${
         iv.status ?? ""
-      }\n${lines || "(no transcript)"}`;
+      }\n${questionBlock}Transcript:\n${lines || "(no transcript)"}`;
     })
     .join("\n\n");
 }
@@ -324,7 +353,12 @@ export function registerNextRoundRoute(app: Express): void {
       `Next round: ${Number(body.round ?? 2)}`,
       `Investment thesis:\n${String(body.thesis ?? "") || "(not given)"}`,
       `Hypotheses and their latest assessment:\n${hyps
-        .map((h) => `- ${h.id}: ${h.title ?? ""} — ${h.assessment ?? "not assessed"}. ${h.rationale ?? ""}`)
+        .map(
+          (h) =>
+            `- ${h.id}: ${h.title ?? ""}${h.description ? ` — ${h.description}` : ""}\n  Assessment: ${
+              h.assessment ?? "not assessed"
+            }. ${h.rationale ?? ""}`,
+        )
         .join("\n")}`,
       `Research gaps:\n${
         gaps.map((g) => `- [${g.priority ?? ""}] ${g.hypothesisId ?? "overall"}: ${g.gap ?? ""} Next step: ${g.nextStep ?? ""}`).join("\n") ||
@@ -338,7 +372,12 @@ export function registerNextRoundRoute(app: Express): void {
           )
           .join("\n") || "(none)"
       }`,
-      `Interviews so far:\n\n${formatInterviews(ivs) || "(none)"}`,
+      `Questions already asked in earlier interviews (do not repeat these; build on the answers):\n${
+        alreadyAsked(ivs).map((q) => `- ${q}`).join("\n") || "(none)"
+      }`,
+      `Interviews so far (who, their question list, and the full transcript with every question and answer):\n\n${
+        formatInterviews(ivs) || "(none)"
+      }`,
     ].join("\n\n");
 
     const startedAt = Date.now();

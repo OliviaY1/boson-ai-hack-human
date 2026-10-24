@@ -39,6 +39,11 @@ export function interviewsPayload(p: DiligenceProject) {
       description: person?.description ?? "",
       audience: planned?.audience ?? "",
       status: iv.status,
+      // Which planned questions were asked, never reached, or dropped during the call.
+      questions: iv.questions.map((q) => ({
+        text: q.text,
+        status: q.removed ? "removed" : q.status === "answered" ? "asked" : "not asked",
+      })),
       transcript: iv.transcript.map((t) => ({
         speaker: t.speaker === "ai" ? "interviewer" : "interviewee",
         text: t.text,

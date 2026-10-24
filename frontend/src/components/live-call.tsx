@@ -107,8 +107,10 @@ export function useLiveCall(project: DiligenceProject, iv: Interview, setIv: Set
 
   const start = useCallback(async () => {
     if (ctrl.current) await ctrl.current.dispose();
-    const open = iv.questions.filter((q) => q.status !== "answered" && !q.removed);
-    kept.current = iv.questions.filter((q) => q.status === "answered" && !q.removed);
+    // Every call starts fresh: all questions (except ones Claude removed before)
+    // are asked again, and the transcript is cleared.
+    const open = iv.questions.filter((q) => !q.removed);
+    kept.current = [];
     startedAt.current = Date.now();
     const c = new CallController(
       {

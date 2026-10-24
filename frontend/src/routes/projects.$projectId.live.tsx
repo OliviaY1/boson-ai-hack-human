@@ -118,12 +118,11 @@ function LivePage() {
         <>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <Badge tone="warning" dot={active ? "pulse" : true}>
-                Demo Simulation
+              <Badge tone={active ? "success" : "neutral"} dot={active ? "pulse" : true}>
+                Live calls
               </Badge>
               <p className="text-sm text-muted-foreground">
-                Interview agents run automatically once a plan is approved. No calls are placed and
-                no audio is recorded.
+                Open an interview and press Start live call. Nothing runs until you do.
               </p>
             </div>
             <div className="flex gap-2">
@@ -211,6 +210,9 @@ function InterviewDetail({
   const done = iv.status === "Completed";
   // A live call drives this interview; the simulation controls stay out of its way.
   const simControls = !done && !iv.live && !call.running;
+  // The old demo simulation's Start / Pause / Advance buttons are hidden: a
+  // live call is the only way an interview runs now.
+  const showSimulation = false;
   return (
     <>
       <div className="flex items-start justify-between border-b px-6 py-4">
@@ -227,7 +229,7 @@ function InterviewDetail({
               <Button variant="secondary" size="sm" onClick={() => setShowAdd((s) => !s)}>
                 <MessageSquarePlus /> Add Follow-Up Question
               </Button>
-              {iv.status === "In Progress" ? (
+              {showSimulation && (iv.status === "In Progress" ? (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -243,8 +245,8 @@ function InterviewDetail({
                 >
                   <Play /> {iv.status === "Paused" ? "Resume" : "Start"}
                 </Button>
-              )}
-              {iv.status === "In Progress" && (
+              ))}
+              {showSimulation && iv.status === "In Progress" && (
                 <Button
                   variant="ghost"
                   size="icon"

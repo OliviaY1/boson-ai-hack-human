@@ -4,13 +4,10 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
 import {
-  advanceMockInterview,
-  autoLaunchInterviews,
   deriveStatus,
   missingSamples,
   withoutProject,
@@ -20,7 +17,6 @@ import type { DiligenceProject } from "./types";
 // v2: projects saved under the earlier key are dropped on purpose, so the demo
 // projects that shipped with the prototype no longer appear in a saved list.
 const KEY = "diligence-live:v2";
-const TICK_MS = 1400;
 
 interface Store {
   projects: DiligenceProject[];
@@ -43,7 +39,6 @@ const touch = (p: DiligenceProject): DiligenceProject => ({
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<DiligenceProject[]>([]);
   const [hydrated, setHydrated] = useState(false);
-  const tick = useRef(0);
 
   useEffect(() => {
     try {
@@ -59,31 +54,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (hydrated) localStorage.setItem(KEY, JSON.stringify(projects));
   }, [projects, hydrated]);
 
-  // Simulation engine: queued interviews launch themselves, then each running
-  // interview advances on its own staggered cadence.
-  useEffect(() => {
-    const t = setInterval(() => {
-      tick.current += 1;
-      const n = tick.current;
-      setProjects((ps) => {
-        let changed = false;
-        const next = ps.map((p) => {
-          const launched = autoLaunchInterviews(p);
-          if (!launched.interviews.some((i) => i.status === "In Progress")) return p;
-          const interviews = launched.interviews.map((iv, idx) =>
-            // Live calls are driven by the real call, never by the simulation.
-            iv.status === "In Progress" && !iv.live && (n + idx) % 2 === 0
-              ? advanceMockInterview(iv)
-              : iv,
-          );
-          changed = true;
-          return touch({ ...launched, interviews });
-        });
-        return changed ? next : ps;
-      });
-    }, TICK_MS);
-    return () => clearInterval(t);
-  }, []);
+  // The demo simulation engine (interviews that started themselves and filled in
+  // canned answers) is switched off: interviews now happen only as real live calls
+  // (components/live-call.tsx), started by the consultant.
 
   const updateProject = useCallback((id: string, fn: (p: DiligenceProject) => DiligenceProject) => {
     setProjects((ps) => ps.map((p) => (p.id === id ? touch(fn(p)) : p)));
